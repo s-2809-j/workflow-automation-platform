@@ -1,0 +1,29 @@
+# Environment files - NEVER push these
+.env
+*.env
+.env.local
+
+# Backend
+backend/.gradle/
+backend/build/
+backend/**/target/
+backend/**/application-local.yml
+*.class
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.env
+
+# AI Service
+ai-service/node_modules/
+ai-service/.env
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.DS_Store
+
+# Docker
+docker-compose.override.yml

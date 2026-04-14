@@ -1,0 +1,51 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: workflow-automation-backend
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_db}
+    username: ${SPRING_DATASOURCE_USERNAME:app_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:app123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: [ "health" ]
+eternal:
+  ai:
+    base-url: http://localhost:3001
+    connect-timeout: 2000
+    read-timeout: 5000
+    mock-mode: true
+    execution-path: /api/v1/execution/logs      # ← add this
+    workflow-path: /api/v1/generate-workflow
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 3600000
+
+workflow:
+  retry:
+    max-attempts: 3
+    initial-delay-ms: 500
+    multiplier: 2.0
+    max-delay-ms: 5000
+    step:
+      base-delay-ms: 200
+    fixed:
+        delay-ms: 2000
+    exponential:
+        base-delay-ms: 1000
