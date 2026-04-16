@@ -74,6 +74,12 @@ export async function callLLM(prompt) {
         code: "AI_AUTH_ERROR",
       });
     }
+// ✅ Service overloaded (high demand)
+if (status === 503 || msg.toLowerCase().includes("unavailable") || msg.toLowerCase().includes("high demand")) {
+  throw Object.assign(new Error("Gemini service temporarily unavailable, please retry later"), {
+    code: "AI_SERVICE_UNAVAILABLE",
+  });
+}
 
     throw Object.assign(new Error(msg || "Gemini call failed"), {
       code: "AI_CALL_FAILED",
