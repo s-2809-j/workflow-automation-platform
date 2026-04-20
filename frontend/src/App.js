@@ -7,6 +7,7 @@ import Executions from './components/Executions';
 import Analytics from './components/Analytics';
 import Logs from './components/Logs';
 import Settings from './components/Settings';
+import AIDrafts from './components/AIDrafts';
 import ProtectedRoute from './components/ProtectedRoutes';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
         <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
         <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/ai-drafts" element={<ProtectedRoute><AIDrafts /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>

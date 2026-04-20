@@ -11,6 +11,11 @@ const NAV_ITEMS = [
         icon: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
       },
       {
+        path: '/ai-drafts', label: 'AI Builder',
+        icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+        badge: 'AI',
+      },
+      {
         path: '/executions', label: 'Executions',
         icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2',
       },
@@ -89,6 +94,9 @@ const Layout = ({ children, toast, onToast }) => {
                     <path d={item.icon}/>
                   </svg>
                   <span>{item.label}</span>
+                  {item.badge && (
+                    <span className="nav-ai-badge">{item.badge}</span>
+                  )}
                   {isActive(item.path) && !item.disabled && <div className="nav-indicator"/>}
                 </button>
               ))}

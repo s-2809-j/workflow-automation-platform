@@ -17,7 +17,19 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-
+  mail:
+    host: smtp.gmail.com          # change to your SMTP host
+    port: 587
+    username: studentedu0428@gmail.com   
+    password: aobi edhd eorh qpkj
+   
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+    default-encoding: UTF-8
 
 
 management:
@@ -30,14 +42,18 @@ eternal:
     base-url: http://localhost:3001
     connect-timeout: 2000
     read-timeout: 5000
-    mock-mode: true
-    execution-path: /api/v1/execution/logs      # ← add this
-    workflow-path: /api/v1/generate-workflow
+    mock-mode: false
+    execution-path: /api/v1/workflows/generate
+    workflow-path: /api/v1/workflows/generate
+    api-key: local-dev-key
 jwt:
-  secret: ${JWT_SECRET}
+  secret: gBLp4b6tPLCVy1K40OJYlWirMh3o9mOV9yh1Mm0s0iU=
   expiration: 3600000
 
 workflow:
+  step:
+    connect-timeout-ms: 5000
+    read-timeout-ms: 15000
   retry:
     max-attempts: 3
     initial-delay-ms: 500
@@ -49,3 +65,8 @@ workflow:
         delay-ms: 2000
     exponential:
         base-delay-ms: 1000
+  executor:
+    pool-size: 5
+  script:
+    timeout-seconds: 10          
+    max-memory-mb: 64 

@@ -53,18 +53,28 @@ public class WorkflowStepEntity {
     @Column(name = "should_fail")
     private boolean shouldFail;
 
-    public List<UUID> getDependsOnList() {
-
-        if (dependsOn == null || !dependsOn.isArray()) {
-            return Collections.emptyList();
-        }
-
-        List<UUID> list = new ArrayList<>();
-
-        for (JsonNode node : dependsOn) {
-            list.add(UUID.fromString(node.asText()));
-        }
-
-        return list;
+    public List<String> getDependsOnList() {
+    if (dependsOn == null || !dependsOn.isArray()) {
+        return Collections.emptyList();
     }
+    List<String> list = new ArrayList<>();
+    for (JsonNode node : dependsOn) {
+        list.add(node.asText());
+    }
+    return list;
+}
+public List<UUID> getDependsOnUUIDs() {
+    if (dependsOn == null || !dependsOn.isArray()) {
+        return Collections.emptyList();
+    }
+    List<UUID> list = new ArrayList<>();
+    for (JsonNode node : dependsOn) {
+        try {
+            list.add(UUID.fromString(node.asText()));
+        } catch (IllegalArgumentException e) {
+            // skip AI-generated placeholder IDs like "step-1"
+        }
+    }
+    return list;
+}
 }

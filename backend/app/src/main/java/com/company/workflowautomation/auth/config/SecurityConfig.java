@@ -2,6 +2,8 @@ package com.company.workflowautomation.auth.config;
 
 import com.company.workflowautomation.auth.jwt.JwtAuthenticationFilter;
 import com.company.workflowautomation.auth.service.CustomUserDetailsService;
+import com.company.workflowautomation.shared.tenant.TenantFilter;
+
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,15 +23,17 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomUserDetailsService userDetailsService;
     private final PasswordEncoder passwordEncoder;
+    private final TenantFilter tenantFilter;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             CustomUserDetailsService userDetailsService,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,TenantFilter tenantFilter) {
 
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.userDetailsService = userDetailsService;
         this.passwordEncoder = passwordEncoder;
+	this.tenantFilter = tenantFilter;
     }
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -48,8 +52,8 @@ public class SecurityConfig {
 
                 .authenticationProvider(authenticationProvider())
 
-                .addFilterBefore(jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, 				UsernamePasswordAuthenticationFilter.class)
+		.addFilterAfter(tenantFilter, 							JwtAuthenticationFilter.class);
 
         return http.build();
     }

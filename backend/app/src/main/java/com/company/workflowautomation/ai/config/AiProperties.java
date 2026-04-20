@@ -10,17 +10,17 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "eternal.ai")
 public class AiProperties {
-    private String baseUrl;           // eternal.ai.base-url
-    private boolean mockMode;         // eternal.ai.mock-mode
-    private String executionPath;     // eternal.ai.execution-path
-    private String workflowPath;      // eternal.ai.workflow-path
-    private int connectTimeout;       // eternal.ai.connect-timeout
+    private String apiKey; 
+    private String baseUrl;           
+    private boolean mockMode;         
+    private String executionPath;     
+    private String workflowPath;      
+    private int connectTimeout;       
     private int readTimeout;
     public String getExecutionUrl() {
         return baseUrl + executionPath;
     }
 
-    // builds full URL: base-url + workflow-path
     public String getWorkflowUrl() {
         return baseUrl + workflowPath;
     }

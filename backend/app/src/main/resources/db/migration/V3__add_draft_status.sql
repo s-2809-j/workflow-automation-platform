@@ -1,0 +1,3 @@
+ALTER TABLE workflow_draft
+    ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    ADD COLUMN IF NOT EXISTS approved_workflow_id UUID;

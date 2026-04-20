@@ -32,6 +32,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
+  implementation("org.springframework.boot:spring-boot-starter-mail")
+
+   
+    implementation("org.graalvm.js:js:23.0.1")
+implementation("org.graalvm.js:js-scriptengine:23.0.1")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.testcontainers:junit-jupiter:1.19.3")
     testImplementation("org.testcontainers:postgresql:1.19.3")
