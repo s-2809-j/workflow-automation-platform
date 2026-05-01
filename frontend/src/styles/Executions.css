@@ -1,0 +1,160 @@
+/* Executions.css */
+
+.exec-page { padding: 32px 36px; max-width: 1100px; }
+
+/* Stats */
+.exec-stats-row {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 14px; margin-bottom: 24px;
+}
+.exec-stat-tile {
+  background: #fff; border-radius: 12px; padding: 18px 20px;
+  border: 1px solid #f0f0f5; position: relative; overflow: hidden;
+  animation: fadeUp 0.3s ease both;
+}
+.exec-stat-val { display: block; font-size: 26px; font-weight: 800; color: #1a1a2e; letter-spacing: -1px; }
+.exec-stat-lbl { display: block; font-size: 12px; font-weight: 500; color: #888; margin-top: 4px; }
+.exec-stat-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: var(--c); }
+
+/* Toolbar */
+.exec-toolbar {
+  display: flex; gap: 12px; margin-bottom: 20px; align-items: center;
+}
+.search-box {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border: 1.5px solid #e5e7eb; border-radius: 10px;
+  padding: 9px 14px; flex: 1; max-width: 420px;
+}
+.search-box input { border: none; outline: none; font-size: 13px; color: #333; width: 100%; background: transparent; }
+.search-box svg { color: #aaa; flex-shrink: 0; }
+
+.filter-tabs { display: flex; gap: 4px; }
+.filter-tab {
+  padding: 8px 14px; border-radius: 8px; border: 1.5px solid #e5e7eb;
+  background: #fff; font-size: 12px; font-weight: 600; color: #888; cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-tab:hover { border-color: #6366f1; color: #6366f1; }
+.tab-active { border-color: #6366f1 !important; background: #6366f1 !important; color: #fff !important; }
+
+/* Cards */
+.exec-list { display: flex; flex-direction: column; gap: 8px; }
+
+.exec-card {
+  background: #fff; border-radius: 12px;
+  border: 1.5px solid #f0f0f5;
+  overflow: hidden;
+  animation: fadeUp 0.25s ease both;
+  transition: border-color 0.15s;
+}
+.exec-card:hover { border-color: #e0e0f0; }
+.exec-card-open { border-color: #e0e0f0; box-shadow: 0 4px 16px rgba(99,102,241,0.08); }
+
+.exec-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; cursor: pointer; gap: 16px;
+}
+.exec-row:hover { background: #fafafa; }
+
+.exec-row-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.exec-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+.exec-run-label { display: flex; align-items: center; gap: 10px; }
+.exec-workflow-name { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+.exec-id-mono { font-size: 11px; color: #aaa; font-family: 'Menlo', 'Monaco', monospace; }
+
+.exec-timestamps { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #999; }
+.exec-dur { color: #6366f1; font-weight: 600; }
+
+.exec-row-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.exec-status-badge {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: 700;
+}
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+.exec-error-chip {
+  display: flex; align-items: center; gap: 4px;
+  background: #fee2e2; color: #b91c1c; font-size: 11px; font-weight: 600;
+  padding: 4px 8px; border-radius: 20px;
+}
+
+.expand-arrow { color: #aaa; transition: transform 0.2s; }
+.arrow-open { transform: rotate(180deg); }
+
+/* Steps Panel */
+.steps-panel {
+  border-top: 1px solid #f0f0f5; padding: 16px 20px;
+  background: #fafbff;
+  animation: fadeDown 0.2s ease;
+}
+
+.steps-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.steps-panel-header span { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+.steps-count-badge {
+  background: #ede9fe; color: #6366f1 !important;
+  padding: 3px 8px; border-radius: 20px; font-size: 11px !important;
+  text-transform: none !important; letter-spacing: 0 !important;
+}
+
+.error-block {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: #fff5f5; border: 1px solid #fecaca; border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 12px;
+}
+.error-block strong { display: block; font-size: 12px; color: #b91c1c; margin-bottom: 2px; }
+.error-block p { font-size: 12px; color: #ef4444; margin: 0; word-break: break-word; }
+
+.steps-loading-row { display: flex; align-items: center; gap: 8px; color: #888; font-size: 13px; padding: 12px 0; }
+.steps-empty-msg { color: #bbb; font-size: 13px; padding: 12px 0; }
+
+.steps-grid { display: flex; flex-direction: column; gap: 6px; }
+
+.step-exec-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #fff; border: 1px solid #f0f0f5; border-radius: 8px;
+  padding: 10px 14px;
+  animation: fadeUp 0.2s ease both;
+}
+.step-exec-left { display: flex; align-items: center; gap: 10px; }
+.step-mini-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.step-exec-id { font-size: 12px; font-family: monospace; color: #555; font-weight: 600; }
+.step-exec-time { font-size: 11px; color: #aaa; margin-top: 2px; }
+
+.step-exec-right { display: flex; align-items: center; gap: 8px; }
+.step-attempt-chip {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: #888; background: #f5f5f8;
+  padding: 3px 8px; border-radius: 20px;
+}
+.step-status-badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+
+/* Empty */
+.exec-empty {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 64px 32px; color: #bbb; gap: 8px; text-align: center;
+}
+.exec-empty h3 { font-size: 16px; color: #555; margin: 0; }
+.exec-empty p { font-size: 13px; margin: 0; }
+
+.btn-back {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 16px; border-radius: 8px; border: 1.5px solid #e5e7eb;
+  background: #fff; font-size: 13px; font-weight: 600; color: #555;
+  cursor: pointer; transition: all 0.15s;
+}
+.btn-back:hover { border-color: #6366f1; color: #6366f1; }
+
+/* Shared topbar */
+.topbar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; }
+.breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #aaa; margin-bottom: 4px; }
+.bc-current { color: #555; font-weight: 500; }
+.page-heading { font-size: 24px; font-weight: 800; color: #1a1a2e; margin: 0; letter-spacing: -0.5px; }
+
+@keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes fadeDown { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
