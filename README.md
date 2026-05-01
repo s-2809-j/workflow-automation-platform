@@ -1,315 +1,359 @@
 # Workflow Automation Platform
 
-A full-stack, AI-augmented workflow automation system that enables organizations to design, execute, and monitor multi-step workflows through a visual interface — with built-in AI assistance for workflow generation and execution log analysis.
+A full-stack, AI-augmented workflow automation system that enables organizations to design, execute, schedule, and monitor multi-step workflows — with an AI assistant powered by Google Gemini for instant workflow drafting and execution log analysis.
 
 ---
 
-## Architecture Overview
+## Table of Contents
 
-The platform is composed of three independently deployable services:
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Environment Variables](#environment-variables)
+  - [Running with Docker Compose](#running-with-docker-compose)
+  - [Running Services Individually](#running-services-individually)
+- [API Reference](#api-reference)
+- [Database Schema](#database-schema)
+- [Contributing](#contributing)
+- [Contributors](#contributors)
+- [License](#license)
+
+---
+
+## Overview
+
+The Workflow Automation Platform is a three-service application that allows teams to:
+
+- **Design** automation workflows composed of sequential or parallel steps with configurable types and inputs
+- **Execute** workflows on demand or on a schedule, with automatic retries using fixed or exponential back-off strategies
+- **Monitor** execution history, per-step logs, and aggregate analytics across all workflow runs
+- **Draft** new workflows instantly using an AI assistant powered by Google Gemini — review and approve before going live
+
+---
+
+## Architecture
 
 ```
-┌─────────────────────┐     REST API      ┌──────────────────────┐     HTTP      ┌─────────────────────┐
-│   React Frontend    │ ────────────────► │  Spring Boot Backend │ ────────────► │  Node.js AI Service │
-│     (Port 3000)     │ ◄──────────────── │     (Port 8080)      │ ◄──────────── │     (Port 5000)     │
-└─────────────────────┘                   └──────────────────────┘               └─────────────────────┘
-                                                     │                                      │
-                                                     ▼                                      ▼
-                                           ┌──────────────────┐               ┌─────────────────────┐
-                                           │   PostgreSQL DB   │               │      MongoDB         │
-                                           │  (Multi-tenant,  │               │  (Execution Logs,   │
-                                           │      RLS)         │               │   Workflow Drafts)  │
-                                           └──────────────────┘               └─────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                         Browser                          │
+│                 React Frontend  :3000                    │
+└────────────────────────┬─────────────────────────────────┘
+                         │ REST / JWT
+           ┌─────────────▼───────────────┐
+           │    Spring Boot Backend      │
+           │          :8080              │
+           │  - JWT Authentication       │
+           │  - Workflow CRUD API        │
+           │  - DAG Execution Engine     │
+           │  - Cron Scheduler & Retry   │
+           │  - Multi-tenant (RLS)       │
+           └────────────┬────────────────┘
+                        │ REST
+          ┌─────────────▼───────────────┐
+          │   AI Service (Node.js)      │
+          │         :3001               │
+          │  - Google Gemini Drafting   │
+          │  - Execution Log Analysis   │
+          │  - MongoDB Storage          │
+          └─────────────────────────────┘
 ```
+
+| Service | Runtime | Port | Database |
+|---|---|---|---|
+| Frontend | React 19 | 3000 | — |
+| Backend | Spring Boot / JDK 21 | 8080 | PostgreSQL 15 |
+| AI Service | Node.js ESM | 3001 | MongoDB |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
+### Backend
+| Technology | Version | Purpose |
+|---|---|---|
+| Java | 21 | Runtime |
+| Spring Boot | 3.2.2 | Web framework |
+| Spring Security + JWT | jjwt 0.12.6 | Authentication |
+| Spring Data JPA | — | ORM / persistence |
+| PostgreSQL | 15 | Primary database with RLS |
+| Flyway | — | Versioned database migrations |
+| GraalVM JS | 23.0.1 | In-process JS execution for workflow steps |
+| Lombok | — | Boilerplate reduction |
+| Gradle | 8.5 | Build tool |
+
+### Frontend
+| Technology | Version | Purpose |
+|---|---|---|
+| React | 19 | UI framework |
+| React Router DOM | 7 | Client-side routing |
+| Axios | 1.x | HTTP client |
+
+### AI Service
+| Technology | Version | Purpose |
+|---|---|---|
+| Node.js (ESM) | 18+ | Runtime |
+| Express | 5 | HTTP framework |
+| @google/generative-ai | 0.24.x | Google Gemini LLM integration |
+| Mongoose | 9.x | MongoDB ODM |
+| Zod | 3.x | Request validation |
+| Helmet | — | Secure HTTP headers |
+| express-rate-limit | — | Rate limiting per endpoint |
+
+### Infrastructure
+| Technology | Purpose |
 |---|---|
-| Frontend | React.js, Axios, React Router |
-| Backend API | Spring Boot 3, Spring Security, Spring Data JPA |
-| AI Service | Node.js, Express.js, Zod, Mongoose |
-| Primary Database | PostgreSQL (Row-Level Security, Flyway migrations) |
-| AI Service Database | MongoDB |
-| Authentication | JWT, BCrypt |
-| Build Tools | Gradle (Backend), npm (Frontend & AI Service) |
-
----
-
-## Repository Structure
-
-```
-workflow-automation-platform/
-├── frontend/               # React.js SPA
-│   ├── src/
-│   │   ├── components/     # Login, ProtectedRoutes
-│   │   ├── pages/          # Workflows, Executions, AIDrafts, Logs
-│   │   └── services/       # Axios API clients
-│   └── public/
-│
-├── backend/                # Spring Boot REST API
-│   ├── src/main/java/
-│   │   ├── api/            # Controllers
-│   │   ├── application/    # Use cases (GenerateWorkflow, ApproveDraft)
-│   │   ├── domain/         # Entities, Repositories
-│   │   ├── config/         # Security, CORS, WebClient
-│   │   └── infrastructure/ # JPA, Filters (JWT, Tenant, CorrelationId)
-│   └── build.gradle
-│
-└── ai-service/             # Node.js Express Microservice
-    ├── src/
-    │   ├── routes/         # workflow, executionLog routes
-    │   ├── controllers/    # AI generation, log analysis
-    │   ├── services/       # LLM integration, retry orchestration
-    │   └── models/         # ExecutionLog, WorkflowDraft (Mongoose)
-    └── package.json
-```
+| Docker + Docker Compose | Containerisation |
+| PostgreSQL 15 | Backend persistence |
+| MongoDB | AI draft and execution log storage |
 
 ---
 
 ## Features
 
-- **Workflow Management** — Create, configure, and manage multi-step workflows with a visual interface
-- **DAG Execution Engine** — Steps execute in dependency order using a Directed Acyclic Graph with topological sorting
-- **Cron Scheduler** — Time-triggered workflow execution with timezone-aware cron expressions
-- **Retry Mechanism** — Configurable exponential and fixed retry strategies with per-step attempt tracking
-- **AI Workflow Generation** — Generate workflow definitions from natural language prompts via LLM integration
-- **AI Draft Review** — Approve or reject AI-generated workflow drafts before they become live workflows
-- **Execution Log Analysis** — Analyze step execution logs for anomalies and retry decisions using AI
-- **Multi-Tenant Architecture** — Organization-scoped data isolation enforced at the database level via PostgreSQL Row-Level Security
-- **JWT Authentication** — Stateless authentication with role-based route protection
+- **Workflow Management** — Create, update, delete, and list automation workflows scoped per organization
+- **Step Composition** — Build workflows from typed steps (HTTP, EMAIL, CONDITION) with configurable inputs and ordering
+- **DAG Execution Engine** — Resolves step dependencies via topological sort and executes steps in correct order
+- **Cron Scheduler** — Timezone-aware, time-based workflow triggering using configurable cron expressions
+- **Retry Mechanism** — Fixed-interval and exponential back-off retry strategies with per-step attempt tracking
+- **AI Workflow Drafting** — Describe a workflow in plain text; Google Gemini returns a structured draft ready for review
+- **Approve / Reject Drafts** — Review AI-generated workflow drafts before promoting them to live workflows
+- **Execution Log Analysis** — AI-powered anomaly detection and retry decision recommendations on execution logs
+- **Multi-Tenant Architecture** — Organization-scoped data isolation enforced via PostgreSQL Row-Level Security
+- **JWT Authentication** — Stateless authentication with protected routes on both backend and frontend
+- **Analytics Dashboard** — Aggregate success/failure metrics across all workflow runs
 
 ---
 
-## Prerequisites
+## Project Structure
 
-Ensure the following are installed before setting up the project:
-
-- Node.js v18 LTS or higher
-- JDK 17 or higher
-- PostgreSQL 14 or higher
-- MongoDB 6 or higher
-- Gradle 8 or higher
+```
+workflow-automation-platform/
+│
+├── backend/                        # Spring Boot application
+│   ├── app/
+│   │   └── src/main/java/com/company/workflowautomation/
+│   │       ├── auth/               # JWT auth, Spring Security config
+│   │       ├── workflow/           # Workflow domain, API, JPA
+│   │       ├── workflow_steps/     # Step domain, API, JPA
+│   │       ├── workflow_execution/ # DAG engine, scheduler, retry
+│   │       ├── ai/                 # AI adapter & retry orchestration
+│   │       ├── shared/             # Tenant filter, CORS, health
+│   │       └── config/             # Global configuration beans
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── init-scripts/               # PostgreSQL initialisation SQL
+│
+├── frontend/                       # React SPA
+│   ├── src/
+│   │   ├── components/             # Workflows, Executions, AIDrafts, Logs, Analytics
+│   │   ├── services/               # Axios API client
+│   │   └── styles/
+│   └── package.json
+│
+├── ai-service/                     # Node.js AI microservice
+│   ├── src/
+│   │   ├── controllers/            # Request handlers
+│   │   ├── routes/                 # Express routers
+│   │   ├── services/               # Gemini integration & business logic
+│   │   ├── models/                 # Mongoose schemas (ExecutionLog, WorkflowDraft)
+│   │   ├── middlewares/            # Auth, error handling
+│   │   ├── schemas/                # Zod validation schemas
+│   │   ├── config/                 # App configuration
+│   │   └── utils/
+│   └── package.json
+│
+├── .env.example                    # Environment variable template
+└── LICENSE
+```
 
 ---
 
 ## Getting Started
 
-### 1. Clone the Repository
+### Prerequisites
+
+| Tool | Version |
+|---|---|
+| Docker | 24+ |
+| Docker Compose | v2+ |
+| Node.js *(local AI service dev)* | 18+ |
+| JDK *(local backend dev)* | 21 |
+
+---
+
+### Environment Variables
+
+Copy the root template and fill in the required values:
 
 ```bash
-git clone https://github.com/s-2809-j/workflow-automation-platform.git
-cd workflow-automation-platform
+cp .env.example .env
 ```
+
+| Variable | Service | Description |
+|---|---|---|
+| `SPRING_DATASOURCE_URL` | Backend | PostgreSQL JDBC URL |
+| `SPRING_DATASOURCE_USERNAME` | Backend | PostgreSQL username |
+| `SPRING_DATASOURCE_PASSWORD` | Backend | PostgreSQL password |
+| `JWT_SECRET` | Backend | Secret key for signing JWTs |
+| `AI_SERVICE_URL` | Backend | Base URL of the AI service |
+| `MOCK_MODE` | Backend / AI Service | Set `true` to skip real Gemini calls during development |
+| `PORT` | AI Service | Listening port (default `3001`) |
+| `GEMINI_API_KEY` | AI Service | Google Gemini API key |
+| `GEMINI_MODEL` | AI Service | Model name (e.g. `gemini-2.5-flash`) |
+| `MONGODB_URI` | AI Service | MongoDB connection string |
+
+> Additional AI service options such as `AI_TIMEOUT_MS`, `MAX_TEXT_LEN`, and `LOG_RAW_AI` are documented in `ai-service/.env.example`.
+
+> **Never commit `.env` files to the repository.**
 
 ---
 
-### 2. Database Setup (PostgreSQL)
+### Running with Docker Compose
 
-```sql
-CREATE DATABASE workflow_db;
-```
-
-Flyway will automatically run all migrations when the Spring Boot application starts. Ensure your database credentials match the environment variables in the backend configuration.
-
----
-
-### 3. Backend — Spring Boot
-
-Navigate to the backend directory:
+The backend `docker-compose.yml` orchestrates PostgreSQL, the Spring Boot API, and the React frontend:
 
 ```bash
 cd backend
+docker compose up --build
 ```
 
-Create an `application-dev.yml` file under `src/main/resources/` with the following configuration:
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8080 |
+| PostgreSQL | localhost:5432 |
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/workflow_db
-    username: your_db_username
-    password: your_db_password
-  jpa:
-    hibernate:
-      ddl-auto: validate
-
-jwt:
-  secret: your_jwt_secret_key
-
-ai-service:
-  base-url: http://localhost:5000
-```
-
-Run the application:
-
-```bash
-./gradlew bootRun
-```
-
-Backend will start on `http://localhost:8080`
+> Start the AI service separately (see below) or add it to the compose file as an additional service.
 
 ---
 
-### 4. AI Service — Node.js
+### Running Services Individually
 
-Navigate to the AI service directory:
-
-```bash
-cd ai-service
-npm install
-```
-
-Create a `.env` file:
-
-```env
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/ai_service_db
-LLM_API_KEY=your_llm_api_key
-```
-
-Start the service:
+#### Backend
 
 ```bash
-npm start
+cd backend
+./gradlew :app:bootRun
 ```
 
-AI Service will start on `http://localhost:5000`
+Flyway will automatically apply all database migrations on startup. API available at `http://localhost:8080`.
 
----
-
-### 5. Frontend — React
-
-Navigate to the frontend directory:
+#### Frontend
 
 ```bash
 cd frontend
 npm install
-```
-
-Create a `.env` file:
-
-```env
-REACT_APP_API_BASE_URL=http://localhost:8080/api/v1
-```
-
-Start the development server:
-
-```bash
 npm start
 ```
 
-Frontend will start on `http://localhost:3000`
+App available at `http://localhost:3000`.
+
+#### AI Service
+
+```bash
+cd ai-service
+cp .env.example .env      # fill in GEMINI_API_KEY and MONGODB_URI
+npm install
+npm run dev               # uses nodemon for hot-reload
+```
+
+Service available at `http://localhost:3001`.
 
 ---
 
 ## API Reference
 
+All backend endpoints require a valid JWT `Authorization: Bearer <token>` header except `/api/auth/**`.
+
 ### Authentication
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/auth/login` | Login and receive JWT token |
+| `POST` | `/api/auth/login` | Authenticate and receive JWT |
 
 ### Workflows
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/v1/workflows` | Get all workflows for current tenant |
-| POST | `/api/v1/workflows` | Create a new workflow |
-| GET | `/api/v1/workflows/{id}` | Get workflow by ID |
-| PUT | `/api/v1/workflows/{id}` | Update workflow |
-| DELETE | `/api/v1/workflows/{id}` | Delete workflow |
+| `GET` | `/api/workflows` | List all workflows for current tenant |
+| `POST` | `/api/workflows` | Create a new workflow |
+| `GET` | `/api/workflows/{id}` | Get workflow details |
+| `PUT` | `/api/workflows/{id}` | Update a workflow |
+| `DELETE` | `/api/workflows/{id}` | Delete a workflow |
 
 ### Workflow Steps
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/v1/workflows/{id}/steps` | Get all steps for a workflow |
-| POST | `/api/v1/workflows/{id}/steps` | Add a step to a workflow |
-| PUT | `/api/v1/workflows/{id}/steps/{stepId}` | Update a step |
-| DELETE | `/api/v1/workflows/{id}/steps/{stepId}` | Delete a step |
+| `GET` | `/api/workflows/{id}/steps` | List steps for a workflow |
+| `POST` | `/api/workflows/{id}/steps` | Add a step to a workflow |
+| `PUT` | `/api/workflows/{id}/steps/{stepId}` | Update a step |
+| `DELETE` | `/api/workflows/{id}/steps/{stepId}` | Delete a step |
 
 ### Execution
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/v1/workflows/{id}/execute` | Trigger workflow execution |
-| GET | `/api/v1/workflows/{id}/executions` | Get execution history |
+| `POST` | `/api/workflows/{id}/execute` | Trigger a workflow run |
+| `GET` | `/api/executions` | List all workflow runs |
+| `GET` | `/api/executions/{runId}/logs` | Fetch per-step execution logs |
 
-### AI Service
+### AI
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/v1/ai/generate-workflow` | Generate workflow draft from prompt |
-| POST | `/api/v1/ai/analyze` | Analyze execution logs for anomalies |
-| POST | `/api/v1/ai/drafts/{draftId}/approve` | Approve AI-generated draft |
-| POST | `/api/v1/ai/drafts/{draftId}/reject` | Reject AI-generated draft |
+| `POST` | `/api/ai/generate-workflow` | Generate workflow draft from plain text prompt |
+| `POST` | `/api/ai/analyze` | Analyze execution logs for anomalies |
+| `POST` | `/api/ai/drafts/{draftId}/approve` | Approve AI-generated draft → creates live workflow |
+| `POST` | `/api/ai/drafts/{draftId}/reject` | Reject AI-generated draft |
 
 ### System
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/v1/health` | Service liveness probe |
+| `GET` | `/actuator/health` | Service liveness probe |
 
 ---
 
 ## Database Schema
 
-The PostgreSQL schema consists of 11 tables with Row-Level Security enforced on all tenant-scoped tables:
+The PostgreSQL schema consists of 11 tables with Row-Level Security enforced on all tenant-scoped tables via the `app.current_organization` session variable:
 
 ```
 organizations        → Root tenant entity
-users                → Scoped to organization
-roles                → Organization-scoped roles (schema ready)
-user_roles           → User-role junction table (schema ready)
-workflow             → Workflow definitions
+users                → Scoped to organization (RLS)
+roles                → Organization-scoped roles
+user_roles           → User-role junction table
+workflow             → Workflow definitions (RLS)
 workflow_steps       → DAG step definitions with depends_on JSONB
 workflow_execution   → Per-execution records with trigger_data JSONB
-step_execution       → Per-step execution with input/output JSONB
-workflow_run         → Coarse-grained run tracking with retry_count
-workflow_schedule    → Cron-based scheduling with timezone support
-workflow_draft       → AI-generated drafts pending approval
+step_execution       → Per-step results with input/output JSONB and attempt_count
+workflow_run         → Coarse-grained run tracking — PENDING/RUNNING/RETRYING/SUCCESS/FAILED
+workflow_schedule    → Cron-based scheduling with timezone and next_run_at
+workflow_draft       → AI-generated drafts — PENDING/APPROVED/REJECTED
 ```
-
----
-
-## Environment Variables
-
-**Never commit `.env` files to the repository.** All sensitive configuration must be managed via environment variables.
-
-| Variable | Service | Description |
-|---|---|---|
-| `spring.datasource.password` | Backend | PostgreSQL password |
-| `jwt.secret` | Backend | JWT signing secret |
-| `ai-service.base-url` | Backend | Node.js AI Service URL |
-| `MONGODB_URI` | AI Service | MongoDB connection string |
-| `LLM_API_KEY` | AI Service | LLM provider API key |
-| `REACT_APP_API_BASE_URL` | Frontend | Spring Boot base URL |
 
 ---
 
 ## Contributing
 
-This project follows a feature-branch Git workflow:
-
-```bash
-# Create a feature branch from develop
-git checkout develop
-git checkout -b feature/your-feature-name
-
-# Commit with conventional commit messages
-git commit -m "feat: add role-based access control to workflow endpoints"
-
-# Push and open a Pull Request → develop
-git push origin feature/your-feature-name
-```
-
-**Commit message conventions:**
-
-| Prefix | Usage |
-|---|---|
-| `feat:` | New feature |
-| `fix:` | Bug fix |
-| `chore:` | Config, dependency, or tooling change |
-| `refactor:` | Code restructure without feature change |
-| `docs:` | Documentation update |
+1. Fork the repository and create a feature branch off `develop`:
+   ```bash
+   git checkout develop
+   git checkout -b feat/your-feature-name
+   ```
+2. Commit changes following [Conventional Commits](https://www.conventionalcommits.org/):
+   ```
+   feat:     new feature
+   fix:      bug fix
+   chore:    config or tooling change
+   refactor: code restructure without behaviour change
+   docs:     documentation update
+   ```
+3. Ensure the backend builds and the frontend compiles without errors:
+   ```bash
+   ./gradlew build        # backend
+   npm run build          # frontend & ai-service
+   ```
+4. Push your branch and open a Pull Request targeting `develop`.
 
 ---
 
@@ -318,10 +362,12 @@ git push origin feature/your-feature-name
 | Name | Role |
 |---|---|
 | [Sarvesh Joshi](https://github.com/s-2809-j) | Frontend (React.js) · Backend (Spring Boot) |
-| Omkar Gaikwad | AI Service (Node.js · Express · MongoDB) |
+| Omkar Gaikwad | AI Service (Node.js · Express · Google Gemini · MongoDB) |
 
 ---
 
 ## License
 
-This project is developed for academic and learning purposes.
+This project is licensed under the **MIT License**. See [LICENSE](./LICENSE) for full terms.
+
+© 2026 Sarvesh Joshi
