@@ -44,7 +44,7 @@ public class WorkflowScheduler {
 
         for (UUID parentId : node.getDependencies()) {
             StepNode parent = graph.get(parentId);
-            if (parent.getStatus().get() != StepStatus.SUCCESS) {
+            if (parent == null || parent.getStatus().get() != StepStatus.SUCCESS) {
                 return false;
             }
         }
@@ -60,7 +60,15 @@ public class WorkflowScheduler {
             Runnable onSuccess,
             Runnable onFailure
     ) throws InterruptedException {
-        log.info("Scheduler started. executionId={} steps={}", executionId, graph.size());;
+        if (graph == null || graph.isEmpty() || stepMap == null || stepMap.isEmpty()) {
+            log.info("No executable steps for workflow executionId={}. Marking workflow as completed without work.", executionId);
+            if (onSuccess != null) {
+                onSuccess.run();
+            }
+            return;
+        }
+
+        log.info("Scheduler started. executionId={} steps={}", executionId, graph.size());
 
         UUID workflowId = stepMap.values().iterator().next().getWorkflowId();
         WorkflowRun run = new WorkflowRun(workflowId, orgId);

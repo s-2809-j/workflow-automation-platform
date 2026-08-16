@@ -12,16 +12,14 @@ import java.util.concurrent.atomic.AtomicReference;
 @Getter
 public class StepNode {
 
-    private UUID stepId;
-    private List<UUID> dependencies;
-    private List<StepNode> children = new ArrayList<>();
-   private AtomicInteger inDegree = new AtomicInteger(0);
-    private AtomicReference<StepStatus> status = new AtomicReference<>(StepStatus.PENDING);
+   private final UUID stepId;
+   private final List<UUID> dependencies;
+   private final List<StepNode> children = new ArrayList<>();
+   private final AtomicInteger inDegree = new AtomicInteger(0);
+   private final AtomicReference<StepStatus> status = new AtomicReference<>(StepStatus.PENDING);
 
-    public StepNode(UUID stepId,List<UUID> dependencies)
-    {
-        this.stepId = stepId;
-        this.dependencies = dependencies !=null ? dependencies:new ArrayList<>();
-
-    }
+   public StepNode(UUID stepId, List<UUID> dependencies) {
+       this.stepId = stepId;
+       this.dependencies = dependencies != null ? new ArrayList<>(dependencies) : new ArrayList<>();
+   }
 }
