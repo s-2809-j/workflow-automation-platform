@@ -1,5 +1,6 @@
 package com.company.workflowautomation.ai.shared.Exception;
 
+import com.company.workflowautomation.auth.service.AccountAlreadyExistsException;
 import com.company.workflowautomation.workflow_execution.application.WorkflowStepExecutionService;
 import com.company.workflowautomation.workflow_steps.application.WorkflowStepService;
 import lombok.extern.slf4j.Slf4j;
@@ -76,6 +77,14 @@ public class GlobalExceptionHandler {
                 .status(500)
                 .body(new ErrorResponse("Internal server error", 500));
     }
+    @ExceptionHandler(AccountAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleAccountAlreadyExists(AccountAlreadyExistsException ex) {
+        log.warn("Account already exists: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(ex.getMessage(), HttpStatus.CONFLICT.value()));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
         log.error("Runtime exception occurred: {}", ex.getMessage(), ex);

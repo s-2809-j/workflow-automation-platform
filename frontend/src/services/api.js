@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 
 const API_URL = 'http://localhost:8080/api';
 
@@ -13,6 +13,9 @@ api.interceptors.request.use((config) => {
 // ── Auth ──────────────────────────────────────────
 export const login = (email, password) =>
   api.post('/auth/login', { email, password });
+
+export const register = (email, password, organizationName) =>
+  api.post('/auth/register', { email, password, organizationName });
 
 // ── Workflows ─────────────────────────────────────
 export const getWorkflows = () => api.get('/workflows');

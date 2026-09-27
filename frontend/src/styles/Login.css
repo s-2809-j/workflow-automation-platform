@@ -1,4 +1,4 @@
-﻿.login-container {
+.login-container {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -76,4 +76,26 @@ button[type="submit"]:disabled {
   border-radius: 5px;
   margin-bottom: 15px;
   font-size: 14px;
+}
+
+.auth-switch {
+  text-align: center;
+  margin-top: 20px;
+  color: #666;
+  font-size: 14px;
+}
+
+.auth-switch button {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.auth-switch button:hover {
+  color: #5568d3;
 }

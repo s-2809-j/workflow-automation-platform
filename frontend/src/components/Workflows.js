@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from './Layout';
 import { getWorkflows, executeWorkflow, createWorkflow, deleteWorkflow, getExecutions } from '../services/api';

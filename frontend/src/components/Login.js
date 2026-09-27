@@ -1,4 +1,4 @@
-﻿import React,{ useState } from 'react';
+import React,{ useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../services/api';
 import '../styles/Login.css';
@@ -65,6 +65,10 @@ const Login = () => {
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
+        <p className="auth-switch">
+          Don't have an account?{' '}
+          <button type="button" onClick={() => navigate('/register')}>Sign up</button>
+        </p>
       </div>
     </div>
   );
