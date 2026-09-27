@@ -47,7 +47,7 @@ app.use(requestIdMiddleware);
 // =====================================================
 
 // AI workflow generation
-app.use("/api/v1/generate-workflow", aiLimiter);
+app.use("/api/v1/workflows/generate", aiLimiter);
 
 // Execution logs
 app.use("/api/v1/execution/logs", logLimiter);

@@ -1,6 +1,5 @@
 package com.company.workflowautomation.workflow_steps.api;
 
-
 import com.company.workflowautomation.util.SecurityUtils;
 import com.company.workflowautomation.workflow_steps.dto.CreateWorkflowStepRequest;
 import com.company.workflowautomation.workflow_steps.application.WorkflowStepService;
@@ -20,30 +19,36 @@ public class WorkflowStepController {
 
     @PostMapping("/workflows/{workflowId}/steps")
     public ResponseEntity<?> createStep(
-            @PathVariable UUID workflowId, @RequestBody CreateWorkflowStepRequest request
-            ) throws JsonProcessingException {
+            @PathVariable UUID workflowId,
+            @RequestBody CreateWorkflowStepRequest request
+    ) throws JsonProcessingException {
         UUID organizationId = SecurityUtils.getOrganizationId();
         UUID stepId = UUID.randomUUID();
-        return ResponseEntity.ok(stepService.createStep(stepId,organizationId,workflowId,request));
+        return ResponseEntity.ok(stepService.createStep(stepId, organizationId, workflowId, request));
     }
 
     @GetMapping("/workflows/{workflowId}/steps")
-    public ResponseEntity<?> getSteps(@PathVariable UUID workflowId)
-    {
+    public ResponseEntity<?> getSteps(@PathVariable UUID workflowId) {
         return ResponseEntity.ok(stepService.getWorkflowSteps(workflowId));
     }
 
+    @GetMapping("/workflows/{workflowId}/required-inputs")
+    public ResponseEntity<?> getRequiredInputs(@PathVariable UUID workflowId) {
+        UUID organizationId = SecurityUtils.getOrganizationId();
+        return ResponseEntity.ok(stepService.getRequiredInputs(workflowId, organizationId));
+    }
+
     @PutMapping("/steps/{id}")
-    public ResponseEntity<?> updateStep(@PathVariable UUID id, @RequestBody UpdateWorkflowStepRequest request) throws JsonProcessingException {
-        return ResponseEntity.ok(stepService.updateStep(id,request));
+    public ResponseEntity<?> updateStep(
+            @PathVariable UUID id,
+            @RequestBody UpdateWorkflowStepRequest request
+    ) throws JsonProcessingException {
+        return ResponseEntity.ok(stepService.updateStep(id, request));
     }
 
     @DeleteMapping("/steps/{id}")
-    public ResponseEntity<?> deleteStep(@PathVariable UUID id)
-    {
+    public ResponseEntity<?> deleteStep(@PathVariable UUID id) {
         stepService.deleteStep(id);
         return ResponseEntity.noContent().build();
     }
 }
-
-

@@ -36,14 +36,19 @@ public class RetryExecutor {
     }
 
     private boolean isRetryable(Exception e) {
-        return !(e instanceof IllegalArgumentException);
+        // Non-retryable: programming errors and unsupported type errors
+        // Retryable: transient errors like network timeouts, DB connection failures
+        return !(e instanceof IllegalArgumentException)
+                && !(e instanceof IllegalStateException)
+                && !(e instanceof NullPointerException)
+                && !e.getClass().getSimpleName().contains("UnsupportedStepType");
     }
-
     private void sleep(long delay) {
         try {
             Thread.sleep(delay);
-
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Retry sleep interrupted", e);
         }
-        catch (InterruptedException ignored){};
     }
 }

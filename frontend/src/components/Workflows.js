@@ -80,7 +80,7 @@ const Workflows = () => {
     e.preventDefault();
     setCreating(true);
     try {
-      const res = await createWorkflow({ ...formData, status: 'ACTIVE' });
+      const res = await createWorkflow({ ...formData });
       const newId = res.data?.id;
       setShowForm(false);
       setFormData({ name: '', description: '' });

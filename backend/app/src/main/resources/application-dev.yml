@@ -1,6 +1,6 @@
-server:
-  port: 8081
-
 logging:
   level:
-    root: DEBUG
+    root: INFO
+    com.company.workflowautomation: DEBUG
+    org.springframework.security: DEBUG
+    org.flywaydb: DEBUG

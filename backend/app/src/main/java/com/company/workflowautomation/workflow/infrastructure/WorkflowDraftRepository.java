@@ -6,9 +6,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface WorkflowDraftRepository extends JpaRepository<WorkflowDraft, UUID>{
+public interface WorkflowDraftRepository extends JpaRepository<WorkflowDraft, UUID> {
+
     Optional<WorkflowDraft> findByIdAndOrganizationId(UUID id, UUID organizationId);
-List<WorkflowDraft> findByOrganizationId(UUID organizationId);
 
+    List<WorkflowDraft> findByOrganizationId(UUID organizationId);
+
+    List<WorkflowDraft> findByOrganizationIdAndStatus(UUID organizationId, String status);
 }
-

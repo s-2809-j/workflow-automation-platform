@@ -7,10 +7,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 public interface WorkflowRunRepository extends JpaRepository<WorkflowRun, UUID> {
-    List<WorkflowRun> findByWorkflowIdOrderByCreatedAtDesc(UUID workflowId);
+    List<WorkflowRun> findByWorkflowIdAndOrganizationIdOrderByCreatedAtDesc(
+            UUID workflowId, UUID organizationId);
 
     // used by RetryOrchestrator to pick up stuck RETRYING runs
-    List<WorkflowRun> findByStatus(WorkflowRunStatus status);
+    List<WorkflowRun> findByStatusAndOrganizationId(WorkflowRunStatus status, UUID organizationId);
 
     // tenant-safe lookup — organization_id must match
     Optional<WorkflowRun> findByIdAndOrganizationId(UUID id, UUID organizationId);

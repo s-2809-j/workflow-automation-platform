@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { Workflow } from "../models/workflow.model.js";
+import { Workflow, ALLOWED_STATUSES } from "../models/workflow.model.js";
 import { z } from "zod";
 
 // ✅ Helper: Convert UTC → IST
@@ -14,7 +14,8 @@ const listWorkflowsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 
-  status: z.enum(["draft", "active", "paused"]).optional(),
+  status: z.enum(ALLOWED_STATUSES).optional(),
+  organizationId: z.string().min(1).optional(),
   provider: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
 
@@ -22,14 +23,10 @@ const listWorkflowsQuerySchema = z.object({
   to: z.string().min(1).optional(),
 });
 
-// ✅ PATCH validation schema
+// ✅ PATCH validation schema — status only
 const updateWorkflowBodySchema = z
   .object({
-    status: z.enum(["draft", "active", "paused"]).optional(),
-    intent: z.string().min(1).optional(),
-    trigger: z.any().optional(),
-    actions: z.array(z.any()).optional(),
-    entities: z.any().optional(),
+    status: z.enum(ALLOWED_STATUSES),
   })
   .strict();
 
@@ -54,10 +51,11 @@ export async function listWorkflows(req, res) {
     const limit = Math.min(Math.max(Number(q.limit || 20), 1), 100);
     const skip = (page - 1) * limit;
 
-    const { status, provider, model, from, to } = q;
+    const { status, organizationId, provider, model, from, to } = q;
 
     const filter = {};
     if (status) filter.status = status;
+    if (organizationId) filter.organizationId = organizationId;
     if (provider) filter.provider = provider;
     if (model) filter.model = model;
 
@@ -183,29 +181,26 @@ export async function updateWorkflow(req, res) {
       return res.status(400).json({
         status: "error",
         code: "VALIDATION_ERROR",
-        message: "Invalid request body.",
+        message: "Invalid request body. Only 'status' may be updated.",
         errors: parsed.error.issues,
       });
     }
 
-    const allowed = ["status", "intent", "trigger", "actions", "entities"];
-    const updates = {};
+    const { status } = parsed.data;
 
-    for (const key of allowed) {
-      if (key in parsed.data) {
-        updates[key] = parsed.data[key];
-      }
-    }
-
-    if (Object.keys(updates).length === 0) {
+    if (!ALLOWED_STATUSES.includes(status)) {
       return res.status(400).json({
         status: "error",
         code: "VALIDATION_ERROR",
-        message: `No valid fields to update.`,
+        message: `Invalid status value '${status}'. Allowed values: ${ALLOWED_STATUSES.join(", ")}.`,
       });
     }
 
-    const updated = await Workflow.findByIdAndUpdate(id, updates, { new: true });
+    const updated = await Workflow.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, runValidators: true }
+    );
 
     if (!updated) {
       return res.status(404).json({
@@ -260,18 +255,7 @@ export async function deleteWorkflow(req, res) {
       });
     }
 
-    // ✅ Convert timestamps
-    const formattedWorkflow = {
-      ...deleted.toObject(),
-      createdAt: convertToIST(deleted.createdAt),
-      updatedAt: convertToIST(deleted.updatedAt),
-    };
-
-    return res.json({
-      status: "success",
-      message: "Workflow deleted.",
-      workflow: formattedWorkflow,
-    });
+    return res.status(204).send();
   } catch (err) {
     return res.status(500).json({
       status: "error",

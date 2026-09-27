@@ -1,151 +1,4 @@
-//package com.company.workflowautomation.workflow_steps.application;
-//
-//import com.company.workflowautomation.util.SecurityUtils;
-//import com.company.workflowautomation.workflow_steps.dto.CreateWorkflowStepRequest;
-//import com.company.workflowautomation.workflow_steps.dto.UpdateWorkflowStepRequest;
-//import com.company.workflowautomation.workflow_steps.jpa.WorkflowStepEntity;
-//import com.company.workflowautomation.workflow_steps.jpa.WorkflowStepRepository;
-//import com.fasterxml.jackson.core.JsonProcessingException;
-//import com.fasterxml.jackson.databind.ObjectMapper;
-//import jakarta.persistence.EntityManager;
-//import lombok.RequiredArgsConstructor;
-//import lombok.extern.slf4j.Slf4j;
-//import org.springframework.stereotype.Service;
-//import org.springframework.transaction.PlatformTransactionManager;
-//import org.springframework.transaction.support.TransactionTemplate;
-//
-//import java.time.Instant;
-//import java.util.List;
-//import java.util.UUID;
-//
-//@Service
-//@RequiredArgsConstructor
-//@Slf4j
-//public class WorkflowStepService {
-//    private final WorkflowStepRepository stepRepository;
-//    private final ObjectMapper objectMapper;
-//    private final EntityManager entityManager;                    // ← ADD
-//    private final PlatformTransactionManager transactionManager;
-//    // ✅ ADD THIS - at the top of your class (after the existing fields)
-//    private static final String[] SUPPORTED_STEP_TYPES = {
-//            "HTTP",
-//            "DATABASE",
-//            "SCRIPT",
-//            "EMAIL",
-//            "WEBHOOK"
-//    };
-//    private void validateStepType(WorkflowStepEntity step) {
-//        String stepType = step.getStepType();
-//
-//        if (stepType == null || stepType.trim().isEmpty()) {
-//            throw new UnsupportedStepTypeException(
-//                    "Step type is null or empty for stepId=" + step.getId());
-//        }
-//
-//        for (String supportedType : SUPPORTED_STEP_TYPES) {
-//            if (supportedType.equalsIgnoreCase(stepType)) {
-//                log.debug("Step type validated successfully. stepType={}", stepType);
-//                return;
-//            }
-//        }
-//
-//        throw new UnsupportedStepTypeException(
-//                "Step type '" + stepType + "' is not supported. " +
-//                        "Supported types are: " + String.join(", ", SUPPORTED_STEP_TYPES));
-//    }
-//    public static class UnsupportedStepTypeException extends RuntimeException {
-//        public UnsupportedStepTypeException(String message) {
-//            super(message);
-//        }
-//
-//        public UnsupportedStepTypeException(String message, Throwable cause) {
-//            super(message, cause);
-//        }
-//    }
-//    private void setOrgContext(UUID organizationId) {
-//        entityManager.createNativeQuery("SELECT set_config('app.current_organization', :orgId, true)")
-//                .setParameter("orgId",organizationId.toString())
-//                .getSingleResult();
-//    }
-//    public WorkflowStepEntity createStep(UUID stepId, UUID organizationId,
-//                                         UUID workflowId,
-//                                         CreateWorkflowStepRequest request) throws JsonProcessingException {
-//
-//        TransactionTemplate transactionTemplate =
-//                new TransactionTemplate(transactionManager);
-//        return transactionTemplate.execute(status -> {
-//            // set org context FIRST — required for RLS + FK check
-//            setOrgContext(organizationId);
-//
-//            WorkflowStepEntity step = new WorkflowStepEntity();
-//            step.setId(stepId);
-//            step.setOrganizationId(organizationId);
-//            step.setWorkflowId(workflowId);
-//            step.setName(request.getName());
-//            step.setStepOrder(request.getStepOrder());
-//            step.setStepType(request.getType());
-//            step.setConfig(request.getConfig());
-//
-//            if (request.getDependsOn() != null) {
-//                step.setDependsOn((request.getDependsOn()));
-//            } else {
-//                step.setDependsOn(objectMapper.createArrayNode());
-//            }
-//            step.setCreatedAt(Instant.now());
-//            step.setUpdatedAt(Instant.now());
-//            return stepRepository.save(step);
-//        });
-//    }
-//
-//
-//    public List<WorkflowStepEntity> getWorkflowSteps(UUID WorkflowId)
-//    {
-//        UUID organizationId = SecurityUtils.getOrganizationId();
-//        setOrgContext(organizationId);
-//        return stepRepository.findByWorkflowIdOrderByStepOrder(WorkflowId);
-//    }
-//
-//    public WorkflowStepEntity updateStep(UUID stepId,
-//                                         UpdateWorkflowStepRequest request) throws JsonProcessingException {
-//
-//        UUID organizationId = SecurityUtils.getOrganizationId();
-//        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-//        return transactionTemplate.execute(status -> {
-//            setOrgContext(organizationId);
-//
-//            WorkflowStepEntity step = stepRepository.findById(stepId).orElseThrow(() ->
-//                    new RuntimeException("Step not found: " + stepId));
-//
-//            step.setStepOrder(request.getStepOrder());
-//            step.setName(request.getName());
-//            step.setStepType(request.getType());
-//            try {
-//                step.setConfig(objectMapper.readTree(request.getConfig()));
-//            } catch (JsonProcessingException e) {
-//                throw new RuntimeException("Invalid config json", e);
-//            }
-//
-//            if (request.getDependsOn() != null) {
-//                step.setDependsOn(request.getDependsOn());
-//            }
-//            step.setUpdatedAt(Instant.now());
-//
-//            return stepRepository.saveAndFlush(step);
-//        });
-//    }
-//
-//    public void deleteStep(UUID stepId)
-//    {
-//        UUID organizationId = SecurityUtils.getOrganizationId();
-//        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-//        transactionTemplate.execute(status -> {
-//            setOrgContext(organizationId);
-//            stepRepository.deleteById(stepId);
-//            return null;
-//        });
-//    }
-//
-//}
+
 package com.company.workflowautomation.workflow_steps.application;
 
 import com.company.workflowautomation.util.SecurityUtils;
@@ -153,7 +6,8 @@ import com.company.workflowautomation.workflow_steps.dto.CreateWorkflowStepReque
 import com.company.workflowautomation.workflow_steps.dto.UpdateWorkflowStepRequest;
 import com.company.workflowautomation.workflow_steps.jpa.WorkflowStepEntity;
 import com.company.workflowautomation.workflow_steps.jpa.WorkflowStepRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.company.workflowautomation.workflow.jpa.WorkflowJpaRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -164,6 +18,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -175,6 +30,7 @@ public class WorkflowStepService {
     private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
     private final PlatformTransactionManager transactionManager;
+    private final WorkflowJpaRepository workflowRepository;
 
     private static final String[] SUPPORTED_STEP_TYPES = {
             "HTTP", "LOG", "DELAY", "DATABASE", "SCRIPT", "EMAIL", "WEBHOOK"
@@ -236,6 +92,9 @@ public class WorkflowStepService {
             // set_config FIRST — required for RLS + FK check, same connection
             setOrgContext(organizationId);
 
+            workflowRepository.findByIdAndOrganizationId(workflowId, organizationId)
+                    .orElseThrow(() -> new RuntimeException("Workflow not found: " + workflowId));
+
             WorkflowStepEntity step = new WorkflowStepEntity();
             step.setId(stepId);
             step.setOrganizationId(organizationId);
@@ -264,7 +123,8 @@ public class WorkflowStepService {
         UUID organizationId = SecurityUtils.getOrganizationId();
         return tx().execute(status -> {
             setOrgContext(organizationId);
-            return stepRepository.findByWorkflowIdOrderByStepOrder(workflowId);
+            return stepRepository.findByWorkflowIdAndOrganizationIdOrderByStepOrder(
+                    workflowId, organizationId);
         });
     }
 
@@ -273,17 +133,18 @@ public class WorkflowStepService {
         return tx().execute(status -> {
             setOrgContext(organizationId);
 
-            WorkflowStepEntity step = stepRepository.findById(stepId)
+            WorkflowStepEntity step = stepRepository.findByIdAndOrganizationId(stepId, organizationId)
                     .orElseThrow(() -> new RuntimeException("Step not found: " + stepId));
 
-            step.setStepOrder(request.getStepOrder());
-            step.setName(request.getName());
-            step.setStepType(request.getType());
+            workflowRepository.findByIdAndOrganizationId(step.getWorkflowId(), organizationId)
+                    .orElseThrow(() -> new RuntimeException("Workflow not found: " + step.getWorkflowId()));
 
-            try {
-                step.setConfig(objectMapper.readTree(request.getConfig()));
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException("Invalid config JSON", e);
+            if (request.getStepOrder() != null) step.setStepOrder(request.getStepOrder());
+            if (request.getName() != null) step.setName(request.getName());
+            if (request.getType() != null) step.setStepType(request.getType());
+
+            if (request.getConfig() != null) {
+                step.setConfig(request.getConfig());
             }
 
             if (request.getDependsOn() != null) {
@@ -300,8 +161,94 @@ public class WorkflowStepService {
         UUID organizationId = SecurityUtils.getOrganizationId();
         tx().execute(status -> {
             setOrgContext(organizationId);
-            stepRepository.deleteById(stepId);
+            WorkflowStepEntity step = stepRepository.findByIdAndOrganizationId(stepId, organizationId)
+                    .orElseThrow(() -> new RuntimeException("Step not found: " + stepId));
+            workflowRepository.findByIdAndOrganizationId(step.getWorkflowId(), organizationId)
+                    .orElseThrow(() -> new RuntimeException("Workflow not found: " + step.getWorkflowId()));
+            
+            // Clean up dependsOn references in other steps
+            List<WorkflowStepEntity> allSteps = stepRepository.findByWorkflowIdAndOrganizationIdOrderByStepOrder(
+                    step.getWorkflowId(), organizationId);
+            
+            for (WorkflowStepEntity otherStep : allSteps) {
+                if (otherStep.getId().equals(stepId)) continue;
+                
+                boolean changed = false;
+                List<String> newDeps = new java.util.ArrayList<>();
+                for (String dep : otherStep.getDependsOnList()) {
+                    if (dep.equals(stepId.toString())) {
+                        changed = true;
+                    } else {
+                        newDeps.add(dep);
+                    }
+                }
+                
+                if (changed) {
+                    otherStep.setDependsOn(objectMapper.valueToTree(newDeps));
+                    stepRepository.save(otherStep);
+                }
+            }
+            
+            stepRepository.delete(step);
             return null;
+        });
+    }
+
+    public List<Map<String, String>> getRequiredInputs(UUID workflowId, UUID organizationId) {
+        return tx().execute(status -> {
+            setOrgContext(organizationId);
+            List<WorkflowStepEntity> steps = stepRepository
+                    .findByWorkflowIdAndOrganizationIdOrderByStepOrder(workflowId, organizationId);
+
+            List<Map<String, String>> required = new java.util.ArrayList<>();
+
+            for (WorkflowStepEntity step : steps) {
+                JsonNode config = step.getConfig();
+                if (config == null) continue;
+
+                // EMAIL step with WORKFLOW_INPUT recipient
+                if ("EMAIL".equalsIgnoreCase(step.getStepType())
+                        && config.has("recipientSource")
+                        && "WORKFLOW_INPUT".equalsIgnoreCase(
+                        config.get("recipientSource").asText())) {
+
+                    String inputKey = config.has("inputKey")
+                            ? config.get("inputKey").asText() : "recipientEmail";
+
+                    Map<String, String> field = new java.util.LinkedHashMap<>();
+                    field.put("stepId",   step.getId().toString());
+                    field.put("stepName", step.getName());
+                    field.put("stepType", step.getStepType());
+                    field.put("key",      inputKey);
+                    field.put("label",    "Recipient Email Address");
+                    field.put("type",     "email");
+                    field.put("required", "true");
+                    required.add(field);
+                }
+
+                // HTTP step with dynamic URL from workflow input
+                if (("HTTP".equalsIgnoreCase(step.getStepType())
+                        || "WEBHOOK".equalsIgnoreCase(step.getStepType()))
+                        && config.has("urlSource")
+                        && "WORKFLOW_INPUT".equalsIgnoreCase(
+                        config.get("urlSource").asText())) {
+
+                    String inputKey = config.has("inputKey")
+                            ? config.get("inputKey").asText() : "url";
+
+                    Map<String, String> field = new java.util.LinkedHashMap<>();
+                    field.put("stepId",   step.getId().toString());
+                    field.put("stepName", step.getName());
+                    field.put("stepType", step.getStepType());
+                    field.put("key",      inputKey);
+                    field.put("label",    "Request URL");
+                    field.put("type",     "url");
+                    field.put("required", "true");
+                    required.add(field);
+                }
+            }
+
+            return required;
         });
     }
 }

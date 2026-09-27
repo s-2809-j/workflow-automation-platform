@@ -68,7 +68,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     log.debug("JWT resolved organizationId={}", organizationId);
 
                     jdbcTemplate.queryForObject(
-                            "SELECT set_config('app.current_organization', ?, false)",
+                            "SELECT set_config('app.current_organization', ?, true)",
                             String.class,
                             organizationId.toString()
                     );

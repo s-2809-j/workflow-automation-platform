@@ -21,10 +21,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation ("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
     runtimeOnly("org.postgresql:postgresql")
     implementation("org.flywaydb:flyway-core")
-    implementation ("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
     implementation("org.springframework.boot:spring-boot-starter-security")
@@ -32,11 +32,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
-  implementation("org.springframework.boot:spring-boot-starter-mail")
-
-   
+    implementation("org.springframework.boot:spring-boot-starter-mail")
     implementation("org.graalvm.js:js:23.0.1")
-implementation("org.graalvm.js:js-scriptengine:23.0.1")
+    implementation("org.graalvm.js:js-scriptengine:23.0.1")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.testcontainers:junit-jupiter:1.19.3")
     testImplementation("org.testcontainers:postgresql:1.19.3")
@@ -45,4 +43,23 @@ implementation("org.graalvm.js:js-scriptengine:23.0.1")
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    doFirst {
+        val envFile = file("../../.env")
+        if (envFile.exists()) {
+            envFile.forEachLine { line ->
+                val trimmed = line.trim()
+                if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
+                    val idx = trimmed.indexOf('=')
+                    if (idx > 0) {
+                        val key = trimmed.substring(0, idx).trim()
+                        val value = trimmed.substring(idx + 1).trim()
+                        environment(key, value)
+                    }
+                }
+            }
+        }
+    }
 }

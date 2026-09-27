@@ -210,7 +210,8 @@ public class AiService {
                     "stepType",  "EMAIL",
                     "name",      "Distribute sales report to management",
                     "config",    Map.of(
-                        "to",      "management@yourcompany.com",
+                        "recipientSource", "FIXED",
+                        "recipient", "",
                         "subject", "Daily Sales Report",
                         "body",    "Please find the daily sales report for today.",
                         "isHtml",  false
@@ -253,7 +254,8 @@ public class AiService {
                     "stepType",  "EMAIL",
                     "name",      "Send notification email",
                     "config",    Map.of(
-                        "to",      "team@yourcompany.com",
+                        "recipientSource", "FIXED",
+                        "recipient", "",
                         "subject", "Automated Notification",
                         "body",    "This is an automated notification from FlowEngine.",
                         "isHtml",  false

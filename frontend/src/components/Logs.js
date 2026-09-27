@@ -1,16 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Layout from './Layout';
-import { getWorkflows, getExecutions } from '../services/api';
-import axios from 'axios';
+import { getWorkflows, getExecutions, getStepExecutions } from '../services/api';
 import '../styles/Logs.css';
-
-const api = axios.create({ baseURL: 'http://localhost:8080/api' });
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-const getStepExecutions = (executionId) => api.get(`/executions/${executionId}/steps`);
 
 const LOG_LEVELS = {
   SUCCESS: { label: 'INFO',  cls: 'log-info',    prefix: '[INFO ]' },

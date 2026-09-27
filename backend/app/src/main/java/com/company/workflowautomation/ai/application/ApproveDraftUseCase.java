@@ -11,6 +11,7 @@ import com.company.workflowautomation.workflow_steps.jpa.WorkflowStepRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,22 +32,32 @@ public class ApproveDraftUseCase {
     private final WorkflowJpaRepository workflowRepository;
     private final WorkflowStepRepository stepRepository;
     private final ObjectMapper objectMapper;
+    private final EntityManager entityManager;
 
     @Transactional
-    public UUID execute(UUID draftId, UUID userId) {
+    public UUID execute(UUID draftId, UUID userId,
+                        Map<String, Map<String, Object>> inputOverrides) {
 
         UUID organizationId = TenantContextHolder.getTenantId();
         if (organizationId == null) {
             throw new IllegalStateException("Organization ID missing from context");
         }
 
+        // RLS is evaluated by PostgreSQL on this transaction's connection, not
+        // from the request ThreadLocal. Set the authenticated tenant before the
+        // workflow insert so WITH CHECK matches workflow.organization_id.
+        entityManager.createNativeQuery(
+                        "SELECT set_config('app.current_organization', :organizationId, true)")
+                .setParameter("organizationId", organizationId.toString())
+                .getSingleResult();
+
         // 1. Fetch and validate draft
         WorkflowDraft draft = draftRepository
-                .findByIdAndOrganizationId(draftId, organizationId)
+                .findByIdAndOrganizationId(draftId, organizationId)  // tenant_id is the actual column
                 .orElseThrow(() -> new DraftAccessException("Draft not found or access denied", 404));
 
-        if ("APPROVED".equals(draft.getStatus())) {
-            throw new IllegalStateException("Draft already approved");
+        if ("APPROVED".equals(draft.getStatus()) || "ACTIVE".equals(draft.getStatus())) {
+            throw new IllegalStateException("Draft already approved: draftId=" + draftId);
         }
 
         // 2. Parse jsonContent
@@ -59,6 +70,10 @@ public class ApproveDraftUseCase {
 
         String workflowName = root.path("name").asText("Untitled Workflow");
 
+        JsonNode stepsValidation = root.path("steps");
+        validateHttpSteps(stepsValidation);
+        validateEmailBodies(stepsValidation);
+        validateEmailRecipients(stepsValidation, draftId, inputOverrides);
         // 3. Create WorkflowEntity
         WorkflowEntity workflow = new WorkflowEntity();
         workflow.setOrganizationId(organizationId);
@@ -81,19 +96,75 @@ public class ApproveDraftUseCase {
                 aiIdToRealId.put(aiId, UUID.randomUUID());
             }
         }
+        log.info("aiIdToRealId map built: {}", aiIdToRealId);
 
-        // 5. Create WorkflowStepEntities with resolved dependsOn UUIDs
+        // 5. Create WorkflowStepEntities — apply user overrides before saving
         if (steps.isArray()) {
             for (int i = 0; i < steps.size(); i++) {
                 JsonNode step = steps.get(i);
                 String aiId = step.path("id").asText();
 
-                // Translate ["step-1", "step-2"] → ["real-uuid-1", "real-uuid-2"]
+                JsonNode depsNode = step.has("dependsOn")
+                        ? step.path("dependsOn")
+                        : step.path("depends_on");
+
                 List<String> resolvedDeps = new ArrayList<>();
-                for (JsonNode dep : step.path("dependsOn")) {
-                    UUID resolvedId = aiIdToRealId.get(dep.asText());
-                    if (resolvedId != null) {
-                        resolvedDeps.add(resolvedId.toString());
+                if (depsNode.isArray()) {
+                    for (JsonNode dep : depsNode) {
+                        String depAiId = dep.asText();
+                        UUID resolvedId = aiIdToRealId.get(depAiId);
+                        if (resolvedId != null) {
+                            resolvedDeps.add(resolvedId.toString());
+                            log.info("Resolved dep: aiId={} → uuid={}", depAiId, resolvedId);
+                        } else {
+                            log.error("BROKEN DEP: step aiId={} declares dep on '{}' which is NOT in aiIdToRealId map. Available keys: {}",
+                                    aiId, depAiId, aiIdToRealId.keySet());
+                        }
+                    }
+                }
+
+                String stepType = step.has("stepType")
+                        ? step.path("stepType").asText("ACTION")
+                        : step.path("step_type").asText("ACTION");
+
+                // Get config — make a mutable copy so we can apply overrides
+                com.fasterxml.jackson.databind.node.ObjectNode config = step.has("config")
+                        ? (com.fasterxml.jackson.databind.node.ObjectNode)
+                        step.path("config").deepCopy()
+                        : objectMapper.createObjectNode();
+
+                // Apply user overrides from the smart config panel
+                Map<String, Object> overridesForStep =
+                        inputOverrides != null ? inputOverrides.get(aiId) : null;
+
+                if (overridesForStep != null && !overridesForStep.isEmpty()) {
+
+                    if ("SCRIPT".equalsIgnoreCase(stepType)) {
+                        // Merge into inputs object
+                        com.fasterxml.jackson.databind.node.ObjectNode inputsNode =
+                                config.has("inputs") && config.get("inputs").isObject()
+                                        ? (com.fasterxml.jackson.databind.node.ObjectNode)
+                                        config.get("inputs").deepCopy()
+                                        : objectMapper.createObjectNode();
+
+                        overridesForStep.forEach((k, v) ->
+                                inputsNode.set(k, objectMapper.valueToTree(v)));
+                        config.set("inputs", inputsNode);
+                        log.info("Applied {} input override(s) to SCRIPT step aiId={}",
+                                overridesForStep.size(), aiId);
+                    }
+
+                    if ("EMAIL".equalsIgnoreCase(stepType)) {
+                        // Apply recipient override directly to config
+                        if (overridesForStep.containsKey("recipient")) {
+                            String recipient = overridesForStep.get("recipient").toString().trim();
+                            if (!recipient.isBlank()) {
+                                config.put("recipient", recipient);
+                                config.put("recipientSource", "FIXED");
+                                log.info("Applied recipient override to EMAIL step aiId={} recipient={}",
+                                        aiId, recipient);
+                            }
+                        }
                     }
                 }
 
@@ -103,22 +174,130 @@ public class ApproveDraftUseCase {
                 stepEntity.setWorkflowId(saved.getId());
                 stepEntity.setStepOrder(i + 1);
                 stepEntity.setName(step.path("name").asText("Step " + (i + 1)));
-                stepEntity.setStepType(step.path("stepType").asText("ACTION"));
-                stepEntity.setConfig(step.path("config"));
-                // Store resolved UUIDs back as a JsonNode (matches the JsonNode dependsOn field)
+                stepEntity.setStepType(stepType);
+                stepEntity.setConfig(config);
                 stepEntity.setDependsOn(objectMapper.valueToTree(resolvedDeps));
                 stepEntity.setCreatedAt(Instant.now());
                 stepEntity.setUpdatedAt(Instant.now());
 
-                stepRepository.save(stepEntity);
-                log.info("Created step order={} name={} dependsOn={}", i + 1, stepEntity.getName(), resolvedDeps);
+                stepRepository.saveAndFlush(stepEntity);
+                log.info("Created step order={} name={} type={} dependsOn={}",
+                        i + 1, stepEntity.getName(), stepType, resolvedDeps);
             }
         }
 
         // 6. Mark draft as approved
         draft.approve(saved.getId());
-        draftRepository.save(draft);
+        draftRepository.saveAndFlush(draft);
 
         return saved.getId();
     }
+    // Backward-compatible overload for any internal callers without overrides
+    @Transactional
+    public UUID execute(UUID draftId, UUID userId) {
+        return execute(draftId, userId, Map.of());
+    }
+    private void validateHttpSteps(JsonNode steps) {
+        if (!steps.isArray()) return;
+        for (JsonNode step : steps) {
+            String stepType = step.has("stepType")
+                    ? step.path("stepType").asText("")
+                    : step.path("step_type").asText("");
+            if (!"HTTP".equalsIgnoreCase(stepType)) continue;
+
+            JsonNode config = step.path("config");
+            String url = config.has("url") ? config.get("url").asText("").trim() : "";
+            String stepName = step.path("name").asText("unknown");
+
+            if (url.isBlank()) {
+                throw new IllegalStateException(
+                        "Cannot approve draft: HTTP step '" + stepName
+                                + "' has no URL configured. Please edit the step config before approving.");
+            }
+
+            // Reject known stale API patterns
+            if (url.contains("exchangerate-api.com/v4")
+                    || url.contains("api.fixer.io/latest")
+                    || url.contains("openexchangerates.org/api/latest")) {
+                throw new IllegalStateException(
+                        "Cannot approve draft: HTTP step '" + stepName
+                                + "' uses a known stale or unreliable API endpoint: " + url
+                                + ". Please update to a reliable live API such as https://open.er-api.com/v6/latest/USD");
+            }
+        }
+    }
+    private void validateEmailBodies(JsonNode steps) {
+        if (!steps.isArray()) return;
+        for (JsonNode step : steps) {
+            String stepType = step.has("stepType")
+                    ? step.path("stepType").asText("") : step.path("step_type").asText("");
+            if (!"EMAIL".equalsIgnoreCase(stepType)) continue;
+
+            JsonNode config = step.path("config");
+            String body = config.has("body") ? config.get("body").asText("") : "";
+            String stepName = step.path("name").asText("unknown");
+
+            // Detect JavaScript code mistakenly placed in email body
+            if (body.contains("var ") || body.contains("function(")
+                    || body.contains("JSON.parse") || body.contains("return ")) {
+                throw new IllegalStateException(
+                        "Cannot approve draft: EMAIL step '" + stepName
+                                + "' has JavaScript code in the body field. "
+                                + "The email body must be a plain static string. "
+                                + "Use a SCRIPT step before this EMAIL step to construct dynamic content.");
+            }
+        }
+    }
+    private void validateEmailRecipients(JsonNode steps, UUID draftId,
+                                         Map<String, Map<String, Object>> inputOverrides) {
+        if (!steps.isArray()) return;
+        for (JsonNode step : steps) {
+            String stepType = step.has("stepType")
+                    ? step.path("stepType").asText("")
+                    : step.path("step_type").asText("");
+            if (!"EMAIL".equalsIgnoreCase(stepType)) continue;
+
+            String stepName  = step.path("name").asText(step.path("id").asText("unknown"));
+            String stepAiId  = step.path("id").asText("");
+            JsonNode config  = step.path("config");
+            String source    = config.has("recipientSource")
+                    ? config.get("recipientSource").asText("").trim().toUpperCase()
+                    : "";
+
+            switch (source) {
+                case "FIXED" -> {
+                    String recipient = config.has("recipient")
+                            ? config.get("recipient").asText("").trim() : "";
+                    boolean inOverrides = inputOverrides != null
+                            && inputOverrides.containsKey(stepAiId)
+                            && inputOverrides.get(stepAiId).containsKey("recipient")
+                            && !inputOverrides.get(stepAiId).get("recipient").toString().trim().isBlank();
+                    if (recipient.isBlank() && !inOverrides) {
+                        throw new IllegalStateException(
+                                "Cannot approve draft: EMAIL step '" + stepName
+                                        + "' requires a recipient email address. "
+                                        + "Please enter your email in the configuration panel.");
+                    }
+                }
+                case "WORKFLOW_INPUT" -> {
+                    String inputKey = config.has("inputKey")
+                            ? config.get("inputKey").asText("").trim() : "";
+                    if (inputKey.isBlank()) {
+                        throw new IllegalStateException(
+                                "Cannot approve draft: EMAIL step '" + stepName
+                                        + "' has recipientSource=WORKFLOW_INPUT but inputKey is missing.");
+                    }
+                }
+                case "PREVIOUS_STEP_OUTPUT" -> {
+                    // No validation needed — executeEmail resolves
+                    // body/subject from the most recent SCRIPT step automatically.
+                }
+                default -> throw new IllegalStateException(
+                        "Cannot approve draft: EMAIL step '" + stepName
+                                + "' has no valid recipientSource. "
+                                + "Configure the recipient using PUT /ai/drafts/" + draftId + "/email-recipient.");
+            }
+        }
+    }
+
 }

@@ -3,6 +3,7 @@ package com.company.workflowautomation.ai.shared.Exception;
 import com.company.workflowautomation.auth.service.AccountAlreadyExistsException;
 import com.company.workflowautomation.workflow_execution.application.WorkflowStepExecutionService;
 import com.company.workflowautomation.workflow_steps.application.WorkflowStepService;
+import com.company.workflowautomation.auth.service.AccountAlreadyExistsException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +43,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(new ErrorResponse("Invalid email or password", 401));
+    }
+
+    @ExceptionHandler(AccountAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleAccountAlreadyExists(AccountAlreadyExistsException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(ex.getMessage(), HttpStatus.CONFLICT.value()));
     }
 
     // ── 2. @Valid failures on request bodies (e.g. AiController @Valid AiRequest)

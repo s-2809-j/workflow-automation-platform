@@ -7,9 +7,9 @@ import com.company.workflowautomation.ai.retry.RetryOrchestrator;
 import com.company.workflowautomation.workflow.domain.WorkflowRun;
 import com.company.workflowautomation.workflow_execution.application.dag.StepNode;
 import com.company.workflowautomation.workflow_execution.application.schedular.StepAttemptTransactionService;
+import com.company.workflowautomation.workflow_execution.jpa.StepExecutionEntity;
 import com.company.workflowautomation.workflow_execution.jpa.StepExecutionRepository;
 import com.company.workflowautomation.workflow_execution.model.StepStatus;
-// ✅ Use the single canonical exception from WorkflowStepService (not a duplicate here)
 import com.company.workflowautomation.workflow_steps.application.WorkflowStepService;
 import com.company.workflowautomation.workflow_steps.jpa.WorkflowStepEntity;
 import lombok.RequiredArgsConstructor;
@@ -29,14 +29,13 @@ public class WorkflowStepExecutionService {
     private final AiAdapter aiAdapter;
     private final RetryOrchestrator retryOrchestrator;
 
-    // ✅ Keep supported types in sync with WorkflowStepService
     private static final String[] SUPPORTED_STEP_TYPES = {
-            "HTTP", "LOG", "DELAY", "DATABASE", "SCRIPT", "EMAIL", "WEBHOOK","ACTION"
+            "HTTP", "LOG", "DELAY", "DATABASE", "SCRIPT", "EMAIL", "WEBHOOK", "ACTION"
     };
 
     public void executeStep(UUID executionId, UUID orgId,
                             WorkflowStepEntity step, StepNode node, WorkflowRun run)
-            throws InterruptedException {
+            {
 
         log.info("Starting step execution. workflowId={} stepId={} orgId={} stepName={}",
                 run.getWorkflowId(), step.getId(), orgId, step.getName());
@@ -46,14 +45,13 @@ public class WorkflowStepExecutionService {
             throw new RuntimeException("orgId is null in async thread");
         }
 
-        // ✅ Validate step type using canonical exception from WorkflowStepService
         validateStepType(step);
 
         stepAttemptTransactionService.initializeStepExecution(executionId, orgId, step.getId());
 
         boolean alreadyExecuted = stepExecutionRepository
-                .existsByWorkflowExecutionIdAndStepIdAndStatus(
-                        executionId, step.getId(), StepStatus.SUCCESS);
+                .existsByWorkflowExecutionIdAndStepIdAndOrganizationIdAndStatus(
+                        executionId, step.getId(), orgId, StepStatus.SUCCESS);
 
         if (alreadyExecuted) {
             node.getStatus().compareAndSet(StepStatus.PENDING, StepStatus.SUCCESS);
@@ -63,37 +61,78 @@ public class WorkflowStepExecutionService {
         boolean started = node.getStatus().compareAndSet(StepStatus.PENDING, StepStatus.RUNNING);
         if (!started) return;
 
+        int maxAttempts = retryProperties.getMaxAttempts();
+
         while (true) {
             try {
                 stepAttemptTransactionService.incrementAttemptCount(executionId, orgId, step.getId());
                 stepAttemptTransactionService.executeSingleAttempt(executionId, orgId, step, node);
-                run.markSuccess();
                 log.info("Step execution completed successfully. stepId={} executionId={}",
                         step.getId(), executionId);
                 return;
 
             } catch (WorkflowStepService.UnsupportedStepTypeException e) {
-                // ✅ Use canonical exception - no need for local duplicate
                 log.error("Step type not supported. stepId={} stepType={} error={}",
                         step.getId(), step.getStepType(), e.getMessage());
-                stepAttemptTransactionService.markFinalFailure(executionId, orgId, step, node, e);
+                stepAttemptTransactionService.markFinalFailure(
+                        executionId, orgId, step, node, e, null);
                 AiRequest aiRequest = buildAiRequest(run.getWorkflowId(), step, e);
-                AiResponse aiResponse = aiAdapter.analyzeExecution(aiRequest);
-                retryOrchestrator.handle(run, aiResponse);
+
+                AiResponse aiResponse = null;
+                try {
+                    aiResponse = aiAdapter.analyzeExecution(aiRequest);
+                } catch (Exception aiEx) {
+                    log.warn("AI analysis failed for stepId={}. Proceeding without AI response. error={}",
+                            step.getId(), aiEx.getMessage());
+                    stepAttemptTransactionService.markFinalFailure(
+                            executionId, orgId, step, node, e, "AI_ANALYSIS_FAILED");
+                }
+                retryOrchestrator.handle(run, aiResponse, executionId, orgId, step.getId());
                 throw new RuntimeException(
                         "Step type '" + step.getStepType() + "' is not supported: " + e.getMessage(), e);
 
             } catch (Exception e) {
-                log.warn("Step failed for stepId={} error={}", step.getId(), e.getMessage());
+                int attemptCount = stepExecutionRepository
+                        .findByWorkflowExecutionIdAndStepIdAndOrganizationId(executionId, step.getId(), orgId)
+                        .map(StepExecutionEntity::getAttemptCount)
+                        .orElse(0);
+
+                log.error("Step attempt {}/{} failed. stepId={} stepName={} error={}",
+                        attemptCount, maxAttempts, step.getId(), step.getName(), e.getMessage(), e);
+
                 AiRequest aiRequest = buildAiRequest(run.getWorkflowId(), step, e);
-                AiResponse aiResponse = aiAdapter.analyzeExecution(aiRequest);
-                boolean shouldRetry = retryOrchestrator.handle(run, aiResponse);
-                if (!shouldRetry) {
-                    stepAttemptTransactionService.markFinalFailure(executionId, orgId, step, node, e);
-                    throw new RuntimeException(
-                            "Step permanently failed after AI decision: " + e.getMessage(), e);
+                AiResponse aiResponse = null;
+                try {
+                    aiResponse = aiAdapter.analyzeExecution(aiRequest);
+                } catch (Exception aiEx) {
+                    log.warn("AI analysis failed for stepId={}. Proceeding without AI response. error={}",
+                            step.getId(), aiEx.getMessage(), aiEx);
                 }
-                log.info("Retrying step stepId={} retryCount={}", step.getId(), run.getRetryCount());
+
+                boolean shouldRetry = retryOrchestrator.handle(
+                        run, aiResponse, executionId, orgId, step.getId());
+
+                attemptCount = stepExecutionRepository
+                        .findByWorkflowExecutionIdAndStepIdAndOrganizationId(
+                                executionId, step.getId(), orgId)
+                        .map(StepExecutionEntity::getAttemptCount)
+                        .orElse(attemptCount);
+
+                if (!shouldRetry || attemptCount >= maxAttempts) {
+                    String reason = attemptCount >= maxAttempts
+                            ? "RETRY_LIMIT_EXHAUSTED" : null;
+                    stepAttemptTransactionService.markFinalFailure(
+                            executionId, orgId, step, node, e, reason);
+                    log.error("Step permanently failed. stepId={} stepName={} executionId={} error={}",
+                            step.getId(), step.getName(), executionId, e.getMessage(), e);
+                    String rawMsg = e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.toString();
+                    throw new RuntimeException(
+                            "Step '" + step.getName() + "' permanently failed after " + attemptCount + " attempt(s): "
+                                    + rawMsg, e);
+                }
+
+                log.info("Retrying step. stepId={} attempt={}/{}",
+                        step.getId(), attemptCount, maxAttempts);
             }
         }
     }
@@ -103,7 +142,7 @@ public class WorkflowStepExecutionService {
                 .workflowId(workflowId)
                 .runId(step.getId())
                 .errorType(e.getClass().getSimpleName())
-                .durationMs(0L)
+                .durationMs(System.currentTimeMillis())
                 .build();
     }
 
@@ -120,6 +159,4 @@ public class WorkflowStepExecutionService {
                 "Step type '" + stepType + "' is not supported. Supported: "
                         + String.join(", ", SUPPORTED_STEP_TYPES));
     }
-    // ✅ REMOVED: duplicate UnsupportedStepTypeException inner class
-    //    Use WorkflowStepService.UnsupportedStepTypeException everywhere instead
 }

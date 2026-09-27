@@ -29,9 +29,18 @@ public class DagBuilder {
             for (String dep : step.getDependsOnList()) {
                 UUID depId = resolveStepId(dep, nameToId);
                 if (depId == null) {
-                    log.warn("Could not resolve dependency '{}' for step '{}'", dep, step.getName());
+                    log.error("Unresolvable dependency '{}' for step '{}'. " +
+                            "Available step names: {}", dep, step.getName(), nameToId.keySet());
+                    throw new IllegalStateException(
+                            "Cannot resolve dependency '" + dep + "' for step '" + step.getName()
+                                    + "'. Check that depends_on values match step names or UUIDs exactly.");
+                }
+                if (!graph.containsKey(depId)) {
+                    log.error("DagBuilder: step {} declares dependency {} which does not exist in this workflow. Broken edge skipped.",
+                            node.getStepId(), depId);
                     continue;
                 }
+                
                 node.getDependencies().add(depId);
                 StepNode parent = graph.get(depId);
                 if (parent != null) {
