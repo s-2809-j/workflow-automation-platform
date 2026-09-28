@@ -4,3 +4,4 @@ logging:
     com.company.workflowautomation: DEBUG
     org.springframework.security: DEBUG
     org.flywaydb: DEBUG
+
