@@ -6,6 +6,7 @@
 # Backend
 backend/.gradle/
 backend/build/
+backend/app/bin/
 backend/**/target/
 backend/**/application-local.yml
 *.class
