@@ -27,4 +27,12 @@ public class SecurityUtils {
     public static UUID getOrganizationId(){
         return UUID.fromString(getPrincipalData().get("organizationId").toString());
     }
+
+    public static UUID getCurrentUserId() {
+        return getUserId();
+    }
+
+    public static UUID getCurrentOrganizationId() {
+        return getOrganizationId();
+    }
 }

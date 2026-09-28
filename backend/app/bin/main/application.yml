@@ -1,0 +1,72 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: workflow-automation-backend
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_db}
+    username: ${SPRING_DATASOURCE_USERNAME:app_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:app123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: update
+  mail:
+    host: smtp.gmail.com          # change to your SMTP host
+    port: 587
+    username: studentedu0428@gmail.com   
+    password: aobi edhd eorh qpkj
+   
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+    default-encoding: UTF-8
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: [ "health" ]
+eternal:
+  ai:
+    base-url: http://localhost:3001
+    connect-timeout: 2000
+    read-timeout: 5000
+    mock-mode: false
+    execution-path: /api/v1/workflows/generate
+    workflow-path: /api/v1/workflows/generate
+    api-key: local-dev-key
+jwt:
+  secret: gBLp4b6tPLCVy1K40OJYlWirMh3o9mOV9yh1Mm0s0iU=
+  expiration: 3600000
+
+workflow:
+  step:
+    connect-timeout-ms: 5000
+    read-timeout-ms: 15000
+  retry:
+    max-attempts: 3
+    initial-delay-ms: 500
+    multiplier: 2.0
+    max-delay-ms: 5000
+    step:
+      base-delay-ms: 200
+    fixed:
+        delay-ms: 2000
+    exponential:
+        base-delay-ms: 1000
+  executor:
+    pool-size: 5
+  script:
+    timeout-seconds: 10          
+    max-memory-mb: 64 

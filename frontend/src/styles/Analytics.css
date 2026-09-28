@@ -1,8 +1,8 @@
 /* Analytics.css */
 
-.analytics-page { padding: 32px 36px; max-width: 1200px; }
+.analytics-page { padding: 32px 36px; max-width: 1400px; }
 
-.range-tabs { display: flex; gap: 4px; }
+.range-tabs { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .range-tab {
   padding: 7px 14px; border-radius: 8px; border: 1.5px solid #e5e7eb;
   background: #fff; font-size: 13px; font-weight: 600; color: #888; cursor: pointer;
@@ -11,8 +11,26 @@
 .range-tab:hover { border-color: #6366f1; color: #6366f1; }
 .range-active { border-color: #6366f1 !important; background: #6366f1 !important; color: #fff !important; }
 
+/* Action buttons in topbar */
+.btn-analytics-action {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border-radius: 8px;
+  border: 1.5px solid #e5e7eb; background: #fff;
+  font-size: 12px; font-weight: 600; color: #555;
+  cursor: pointer; transition: all 0.15s; margin-left: 4px;
+}
+.btn-analytics-action:hover:not(:disabled) { border-color: #6366f1; color: #6366f1; }
+.btn-analytics-action:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-export { border-color: #d1fae5; color: #10b981; }
+.btn-export:hover:not(:disabled) { border-color: #10b981 !important; background: #ecfdf5; color: #059669 !important; }
+
+@keyframes ring {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* KPI Cards */
-.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+.kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px; }
 
 .kpi-card {
   background: #fff;

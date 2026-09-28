@@ -5,8 +5,12 @@ spring:
   application:
     name: workflow-automation-backend
   flyway:
-    enabled: true
+    enabled: false
     baseline-on-migrate: true
+    baseline-version: 1
+    create-schemas: false
+    validate-on-migrate: false
+    out-of-order: false
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_db}
     username: ${SPRING_DATASOURCE_USERNAME:app_user}
@@ -18,11 +22,10 @@ spring:
     hibernate:
       ddl-auto: update
   mail:
-    host: smtp.gmail.com          # change to your SMTP host
-    port: 587
-    username: studentedu0428@gmail.com   
-    password: aobi edhd eorh qpkj
-   
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${MAIL_USERNAME:${SPRING_MAIL_USERNAME:studentedu0428@gmail.com}}
+    password: ${MAIL_PASSWORD:${SPRING_MAIL_PASSWORD:bwhrkhjsexssjqkt}}
     properties:
       mail:
         smtp:
@@ -31,7 +34,6 @@ spring:
             enable: true
     default-encoding: UTF-8
 
-
 management:
   endpoints:
     web:
@@ -39,13 +41,13 @@ management:
         include: [ "health" ]
 eternal:
   ai:
-    base-url: http://localhost:3001
+    base-url: ${AI_SERVICE_URL:http://localhost:3001}
     connect-timeout: 2000
     read-timeout: 5000
     mock-mode: false
-    execution-path: /api/v1/workflows/generate
+    execution-path: /api/v1/analyze
     workflow-path: /api/v1/workflows/generate
-    api-key: local-dev-key
+    api-key: ${AI_SERVICE_API_KEY:local-dev-key}
 jwt:
   secret: gBLp4b6tPLCVy1K40OJYlWirMh3o9mOV9yh1Mm0s0iU=
   expiration: 3600000

@@ -53,6 +53,7 @@ const Layout = ({ children, toast, onToast }) => {
   const location = useLocation();
   const email = localStorage.getItem('email') || 'user@company.com';
   const initials = email.slice(0, 2).toUpperCase();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -62,65 +63,104 @@ const Layout = ({ children, toast, onToast }) => {
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
+  const closeSidebar = () => setMobileSidebarOpen(false);
+
+  const SidebarContent = () => (
+    <>
+      <div className="sidebar-brand">
+        <div className="brand-mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+        </div>
+        <span className="brand-name">FlowEngine</span>
+        {/* Close button — only visible on mobile */}
+        <button className="sidebar-close-btn" onClick={closeSidebar} title="Close menu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      {NAV_ITEMS.map(group => (
+        <div key={group.section}>
+          <p className="sidebar-section-label">{group.section}</p>
+          <nav className="sidebar-nav">
+            {group.items.map(item => (
+              <button
+                key={item.label}
+                className={`nav-item ${isActive(item.path) && !item.disabled ? 'nav-active' : ''} ${item.disabled ? 'nav-disabled' : ''}`}
+                onClick={() => {
+                  if (item.disabled) {
+                    onToast && onToast(`${item.label} — coming soon`, 'info');
+                  } else {
+                    navigate(item.path);
+                    closeSidebar();
+                  }
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d={item.icon}/>
+                </svg>
+                <span>{item.label}</span>
+                {item.badge && (
+                  <span className="nav-ai-badge">{item.badge}</span>
+                )}
+                {isActive(item.path) && !item.disabled && <div className="nav-indicator"/>}
+              </button>
+            ))}
+          </nav>
+        </div>
+      ))}
+
+      <div className="sidebar-user">
+        <div className="avatar-circle">{initials}</div>
+        <div className="user-info-block">
+          <span className="user-email-label">{email}</span>
+          <span className="user-tier">Pro Plan</span>
+        </div>
+        <button className="sign-out-btn" onClick={handleLogout} title="Sign out">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className="app-layout">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <div className="brand-mark">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-            </svg>
-          </div>
-          <span className="brand-name">FlowEngine</span>
-        </div>
+      {/* Desktop Sidebar */}
+      <aside className="sidebar sidebar-desktop">
+        <SidebarContent />
+      </aside>
 
-        {NAV_ITEMS.map(group => (
-          <div key={group.section}>
-            <p className="sidebar-section-label">{group.section}</p>
-            <nav className="sidebar-nav">
-              {group.items.map(item => (
-                <button
-                  key={item.label}
-                  className={`nav-item ${isActive(item.path) && !item.disabled ? 'nav-active' : ''} ${item.disabled ? 'nav-disabled' : ''}`}
-                  onClick={() => {
-                    if (item.disabled) {
-                      onToast && onToast(`${item.label} — coming soon`, 'info');
-                    } else {
-                      navigate(item.path);
-                    }
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d={item.icon}/>
-                  </svg>
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className="nav-ai-badge">{item.badge}</span>
-                  )}
-                  {isActive(item.path) && !item.disabled && <div className="nav-indicator"/>}
-                </button>
-              ))}
-            </nav>
-          </div>
-        ))}
+      {/* Mobile Overlay */}
+      {mobileSidebarOpen && (
+        <div className="sidebar-overlay" onClick={closeSidebar} />
+      )}
 
-        <div className="sidebar-user">
-          <div className="avatar-circle">{initials}</div>
-          <div className="user-info-block">
-            <span className="user-email-label">{email}</span>
-            <span className="user-tier">Pro Plan</span>
-          </div>
-          <button className="sign-out-btn" onClick={handleLogout} title="Sign out">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-          </button>
-        </div>
+      {/* Mobile Sidebar */}
+      <aside className={`sidebar sidebar-mobile ${mobileSidebarOpen ? 'sidebar-mobile-open' : ''}`}>
+        <SidebarContent />
       </aside>
 
       <main className="main-content">
+        {/* Mobile Hamburger */}
+        <button
+          className="hamburger-btn"
+          onClick={() => setMobileSidebarOpen(true)}
+          title="Open menu"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+
         {children}
       </main>
 

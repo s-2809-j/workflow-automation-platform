@@ -5,5 +5,13 @@ public enum WorkflowRunStatus {
     RUNNING,
     SUCCESS,
     FAILED,
-    RETRYING
+    RETRYING;
+
+    public boolean isTerminal() {
+        return this == SUCCESS || this == FAILED;
+    }
+
+    public boolean isRetryable() {
+        return this == RUNNING || this == RETRYING;
+    }
 }

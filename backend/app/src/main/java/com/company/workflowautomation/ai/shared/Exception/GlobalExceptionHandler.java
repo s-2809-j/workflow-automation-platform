@@ -1,5 +1,6 @@
 package com.company.workflowautomation.ai.shared.Exception;
 
+import com.company.workflowautomation.auth.service.AccountAlreadyExistsException;
 import com.company.workflowautomation.workflow_execution.application.WorkflowStepExecutionService;
 import com.company.workflowautomation.workflow_steps.application.WorkflowStepService;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,12 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("Invalid email or password", 401));
     }
 
+    @ExceptionHandler(AccountAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleAccountAlreadyExists(AccountAlreadyExistsException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(ex.getMessage(), HttpStatus.CONFLICT.value()));
+    }
+
     // ── 2. @Valid failures on request bodies (e.g. AiController @Valid AiRequest)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
@@ -68,7 +75,6 @@ public class GlobalExceptionHandler {
     }
 
 
-    // ── 4. Catch-all — never expose internal details to the caller
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
         log.error("Unhandled exception: {}", ex.getMessage(), ex);
@@ -76,6 +82,7 @@ public class GlobalExceptionHandler {
                 .status(500)
                 .body(new ErrorResponse("Internal server error", 500));
     }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
         log.error("Runtime exception occurred: {}", ex.getMessage(), ex);

@@ -1,17 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from './Layout';
-import { getWorkflows, getExecutions } from '../services/api';
-import axios from 'axios';
+import { getWorkflows, getExecutions, getStepExecutions, asArray } from '../services/api';
 import '../styles/Executions.css';
-
-const api = axios.create({ baseURL: 'http://localhost:8080/api' });
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-const getStepExecutions = (executionId) => api.get(`/executions/${executionId}/steps`);
 
 const STATUS_CONFIG = {
   SUCCESS: { cls: 'status-success', label: 'Success', dot: '#10b981', bg: '#dcfce7', color: '#15803d' },
@@ -55,7 +46,7 @@ const Executions = () => {
   const fetchAll = useCallback(async () => {
     try {
       const wfRes = await getWorkflows();
-      const wfs = wfRes.data || [];
+      const wfs = asArray(wfRes.data);
       setWorkflows(wfs);
 
       const targetWfs = workflowIdParam
@@ -65,7 +56,7 @@ const Executions = () => {
       const execArrays = await Promise.all(
         targetWfs.map(wf =>
           getExecutions(wf.id)
-            .then(r => (r.data || []).map(e => ({ ...e, workflowName: wf.name, workflowId: wf.id })))
+            .then(r => asArray(r.data).map(e => ({ ...e, workflowName: wf.name, workflowId: wf.id })))
             .catch(() => [])
         )
       );
@@ -87,9 +78,10 @@ const Executions = () => {
     setStepsLoading(p => ({ ...p, [execId]: true }));
     try {
       const res = await getStepExecutions(execId);
-      setStepsMap(p => ({ ...p, [execId]: res.data || [] }));
+      setStepsMap(p => ({ ...p, [execId]: asArray(res.data) }));
     } catch {
       setStepsMap(p => ({ ...p, [execId]: [] }));
+      showToast('Failed to load step executions', 'error');
     } finally {
       setStepsLoading(p => ({ ...p, [execId]: false }));
     }

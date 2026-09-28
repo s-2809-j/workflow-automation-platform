@@ -6,16 +6,8 @@ import { decideRetry } from "../services/retryDecision.services.js";
 
 const router = express.Router();
 
-// 🔹 Baseline
-const baselineMap = {
-  "64f8c2a9e13b2c0012a12345": {
-    maxDurationMs: 60000,
-  },
-};
+const baselineMap = {};
 
-// ======================================================
-// 🔹 CONTRACT 2 → /api/v1/analyze
-// ======================================================
 router.post("/analyze", async (req, res) => {
   try {
     const { workflowId, errorType, durationMs } = req.body;
@@ -40,6 +32,9 @@ router.post("/analyze", async (req, res) => {
     return res.json({
       shouldRetry: retryDecision.shouldRetry,
       reason: retryDecision.reason || "Decision based on error type",
+      strategy: retryDecision.strategy || "fixed",
+      maxRetries: retryDecision.maxRetries || 1,
+      baseDelayMs: retryDecision.baseDelayMs || 5000,
     });
 
   } catch (err) {
@@ -51,9 +46,7 @@ router.post("/analyze", async (req, res) => {
   }
 });
 
-// ======================================================
-// 🔹 EXISTING LOG API (keep it)
-// ======================================================
+
 router.post("/execution/logs", async (req, res, next) => {
   try {
     const validatedData = executionLogSchema.parse(req.body);

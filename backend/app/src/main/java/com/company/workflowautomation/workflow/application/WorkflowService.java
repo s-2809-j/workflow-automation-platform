@@ -4,18 +4,21 @@ import com.company.workflowautomation.workflow.jpa.WorkflowEntity;
 import com.company.workflowautomation.workflow.jpa.WorkflowJpaRepository;
 import com.company.workflowautomation.workflow.dto.CreateWorkflowRequest;
 import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-
+import com.company.workflowautomation.util.SecurityUtils;
 @Service
 public class WorkflowService {
     private final WorkflowJpaRepository workflowRepository;
     private final EntityManager entityManager;
 
+    @Transactional
     public List<WorkflowEntity> getWorkflows(UUID userId, UUID organizationId) {
+        setOrganizationContext(organizationId);
         return workflowRepository.findByOrganizationId(organizationId);
     }
     public WorkflowService(WorkflowJpaRepository workflowRepository, EntityManager entityManager)
@@ -24,13 +27,10 @@ public class WorkflowService {
         this.entityManager = entityManager;
     }
 
+    @Transactional
     public WorkflowEntity createWorkflow(CreateWorkflowRequest request, UUID userid, UUID organizationId)
     {
-        entityManager.createNativeQuery(
-                        "SELECT set_config('app.current_organization', :orgId, false)"
-                )
-                .setParameter("orgId", organizationId.toString())
-                .getSingleResult();
+        setOrganizationContext(organizationId);
         WorkflowEntity workflow= new WorkflowEntity();
         workflow.setOrganizationId(organizationId);
         workflow.setName(request.getName());
@@ -43,19 +43,36 @@ public class WorkflowService {
         return workflowRepository.save(workflow);
     }
 
+    @Transactional
     public List<WorkflowEntity> getAllWorkflows(UUID organizationId) {
+        setOrganizationContext(organizationId);
         return workflowRepository.findByOrganizationId(organizationId); // ✅ filter by org
     }
 
-
-    public WorkflowEntity getWorkflow(UUID id)
-    {
-        return workflowRepository.findById(id).orElseThrow(()-> new RuntimeException("Workflow Not Found"));
+    private void setOrganizationContext(UUID organizationId) {
+        entityManager.createNativeQuery(
+                        "SELECT set_config('app.current_organization', :orgId, true)")
+                .setParameter("orgId", organizationId.toString())
+                .getSingleResult();
     }
 
+
+    @Transactional
+    public WorkflowEntity getWorkflow(UUID id)
+    {
+        UUID organizationId = SecurityUtils.getOrganizationId();
+        setOrganizationContext(organizationId);
+        return workflowRepository.findByIdAndOrganizationId(id, organizationId)
+                .orElseThrow(() -> new RuntimeException("Workflow Not Found"));
+    }
+
+    @Transactional
     public WorkflowEntity updateWorkflow(UUID id,CreateWorkflowRequest request)
     {
-        WorkflowEntity workflow = getWorkflow(id);
+        UUID organizationId = SecurityUtils.getOrganizationId();
+        setOrganizationContext(organizationId);
+        WorkflowEntity workflow = workflowRepository.findByIdAndOrganizationId(id, organizationId)
+                .orElseThrow(() -> new RuntimeException("Workflow Not Found"));
         workflow.setName(request.getName());
         workflow.setDescription(request.getDescription());
         workflow.setUpdatedAt(Instant.now());
@@ -63,9 +80,13 @@ public class WorkflowService {
     }
 
 
+    @Transactional
     public void deleteWorkflow(UUID id)
     {
-        WorkflowEntity workflow = getWorkflow(id);
+        UUID organizationId = SecurityUtils.getOrganizationId();
+        setOrganizationContext(organizationId);
+        WorkflowEntity workflow = workflowRepository.findByIdAndOrganizationId(id, organizationId)
+                .orElseThrow(() -> new RuntimeException("Workflow Not Found"));
         workflowRepository.delete(workflow);
     }
 

@@ -1,6 +1,7 @@
-﻿import React from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
+import Register from './components/Register';
 import Workflows from './components/Workflows';
 import WorkflowDetail from './components/WorkflowDetail';
 import Executions from './components/Executions';
@@ -15,6 +16,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/workflows" element={<ProtectedRoute><Workflows /></ProtectedRoute>} />
         <Route path="/workflows/:id" element={<ProtectedRoute><WorkflowDetail /></ProtectedRoute>} />
         <Route path="/workflows/:id/executions" element={<ProtectedRoute><Executions /></ProtectedRoute>} />

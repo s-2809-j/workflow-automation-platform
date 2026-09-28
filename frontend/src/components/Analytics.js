@@ -7,6 +7,7 @@ const Analytics = () => {
   const [workflows, setWorkflows] = useState([]);
   const [allExecutions, setAllExecutions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState(null);
   const [range, setRange] = useState(7); // days
 
@@ -32,6 +33,27 @@ const Analytics = () => {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchAll();
+    setRefreshing(false);
+    showToast('Analytics refreshed', 'info');
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Date', 'Total', 'Success', 'Failed'];
+    const rows = dailyData.map(d => [d.label, d.total, d.success, d.failed]);
+    const csvContent = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `flowengine-analytics-${range}d.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exported', 'success');
+  };
 
   // ── Computed metrics ──
   const now = new Date();
@@ -109,16 +131,29 @@ const Analytics = () => {
                 {d}d
               </button>
             ))}
+            <button className="btn-analytics-action" onClick={handleRefresh} disabled={refreshing} title="Refresh data">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: refreshing ? 'ring 0.8s linear infinite' : 'none' }}>
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+            <button className="btn-analytics-action btn-export" onClick={handleExportCSV} title="Export CSV">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export CSV
+            </button>
           </div>
         </div>
 
         {/* KPI Cards */}
         <div className="kpi-row">
           {[
-            { label: 'Total Runs', value: total, sub: `Last ${range} days`, accent: '#6366f1', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2' },
-            { label: 'Success Rate', value: `${rate}%`, sub: `${success} succeeded`, accent: '#10b981', icon: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3' },
-            { label: 'Failed Runs', value: failed, sub: failed === 0 ? 'All clear!' : 'Need attention', accent: '#ef4444', icon: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01' },
-            { label: 'Avg Duration', value: avgDuration || '—', sub: 'Per execution', accent: '#f59e0b', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2' },
+            { label: 'Total Runs',    value: total,             sub: `Last ${range} days`,                   accent: '#6366f1', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2' },
+            { label: 'Success Rate',  value: `${rate}%`,        sub: `${success} succeeded`,                 accent: '#10b981', icon: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3' },
+            { label: 'Failed Runs',   value: failed,            sub: failed === 0 ? 'All clear!' : 'Need attention', accent: '#ef4444', icon: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01' },
+            { label: 'Running Now',   value: running,           sub: running === 0 ? 'None in progress' : 'In progress', accent: '#8b5cf6', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM10 15l5-3-5-3v6z' },
+            { label: 'Avg Duration',  value: avgDuration || '—', sub: 'Per execution',                      accent: '#f59e0b', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2' },
           ].map((k, i) => (
             <div key={i} className="kpi-card" style={{ '--kc': k.accent }}>
               <div className="kpi-icon">

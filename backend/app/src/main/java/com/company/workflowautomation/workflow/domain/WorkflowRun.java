@@ -51,6 +51,11 @@ public class WorkflowRun {
     }
 
     public void markRetrying(String errorMessage) {
+        if (this.status.isTerminal()) {
+            throw new IllegalStateException(
+                    "Cannot mark RETRYING from terminal status " + this.status
+                            + " for runId=" + this.id);
+        }
         this.status = WorkflowRunStatus.RETRYING;
         this.errorMessage = errorMessage;
         this.retryCount++;
@@ -66,6 +71,10 @@ public class WorkflowRun {
     public void markFailed(String errorMessage) {
         this.status = WorkflowRunStatus.FAILED;
         this.errorMessage = errorMessage;
+        this.updatedAt = Instant.now();
+    }
+    public void markFailed() {
+        this.status = WorkflowRunStatus.FAILED;
         this.updatedAt = Instant.now();
     }
 }

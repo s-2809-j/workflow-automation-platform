@@ -31,11 +31,11 @@ router.get("/execution/workflows/:id", async (req, res) => {
   }
 
   // 4) Ensure workflow is active before execution
-  if (wf.status !== "active") {
+  if (wf.status !== "ACTIVE") {
     return res.status(400).json({
       status: "error",
       code: "WORKFLOW_NOT_ACTIVE",
-      message: "Workflow is not active and cannot be executed.",
+      message: "Workflow is not ACTIVE and cannot be executed.",
       requestId: req.requestId,
     });
   }

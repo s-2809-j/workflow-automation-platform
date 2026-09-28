@@ -43,6 +43,17 @@ public class WorkflowController {
         workflowService.deleteWorkflow(id);
         return ResponseEntity.noContent().build();
     }
+    @GetMapping("/{id}")
+    public ResponseEntity<WorkflowEntity> getWorkflow(@PathVariable UUID id) {
+        return ResponseEntity.ok(workflowService.getWorkflow(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<WorkflowEntity> updateWorkflow(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateWorkflowRequest request) {
+        return ResponseEntity.ok(workflowService.updateWorkflow(id, request));
+    }
 
 }
 
