@@ -31,7 +31,19 @@ const Register = () => {
   return (
     <div className="login-container">
       <div className="login-box">
+        {/* Brand Header */}
+        <div className="login-brand">
+          <div className="login-brand-mark">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          </div>
+          <span className="login-brand-name">FlowEngine</span>
+        </div>
+
         <h1>Create your account</h1>
+        <p className="login-sub">Start automating your workflows today</p>
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Email</label>
@@ -41,7 +53,7 @@ const Register = () => {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              placeholder="Enter email"
+              placeholder="Enter your email"
             />
           </div>
           <div className="form-group">
@@ -79,12 +91,13 @@ const Register = () => {
           </div>
           {error && <div className="error-message">{error}</div>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Creating account...' : 'Sign up'}
+            {loading ? 'Creating account...' : 'Create Account'}
           </button>
         </form>
+
         <p className="auth-switch">
           Already have an account?{' '}
-          <button type="button" onClick={() => navigate('/login')}>Log in</button>
+          <button type="button" onClick={() => navigate('/login')}>Sign in</button>
         </p>
       </div>
     </div>

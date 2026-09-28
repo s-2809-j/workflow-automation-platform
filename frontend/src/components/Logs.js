@@ -128,6 +128,29 @@ const Logs = () => {
     return matchLevel && matchSearch;
   });
 
+  const buildLogText = () =>
+    filtered.map(e => {
+      const lvl = LOG_LEVELS[e.level] || LOG_LEVELS.PENDING;
+      return `${fmt(e.ts)} ${lvl.prefix} [${e.source}] ${e.message}`;
+    }).join('\n');
+
+  const handleCopyLogs = () => {
+    if (!filtered.length) return;
+    navigator.clipboard.writeText(buildLogText()).then(() => showToast('Logs copied to clipboard', 'success'));
+  };
+
+  const handleDownloadLogs = () => {
+    if (!filtered.length) return;
+    const blob = new Blob([buildLogText()], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `flowengine-logs-${selectedExec ? selectedExec.slice(0, 8) : 'all'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Log file downloaded', 'success');
+  };
+
   if (loading) return (
     <div className="loading-screen">
       <div className="loading-ring"><div/><div/><div/><div/></div>
@@ -212,6 +235,30 @@ const Logs = () => {
                 <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)}/>
                 <span>Auto-scroll</span>
               </label>
+              <div className="log-action-btns">
+                <button
+                  className="log-action-btn"
+                  onClick={handleCopyLogs}
+                  disabled={!filtered.length}
+                  title="Copy logs to clipboard"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                  Copy
+                </button>
+                <button
+                  className="log-action-btn log-download-btn"
+                  onClick={handleDownloadLogs}
+                  disabled={!filtered.length}
+                  title="Download logs as .txt"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Download
+                </button>
+              </div>
             </div>
 
             <div className="log-terminal" ref={logRef}>

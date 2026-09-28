@@ -46,18 +46,19 @@ tasks.withType<Test> {
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
-    doFirst {
-        val envFile = file("../../.env")
-        if (envFile.exists()) {
-            envFile.forEachLine { line ->
-                val trimmed = line.trim()
-                if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
-                    val idx = trimmed.indexOf('=')
-                    if (idx > 0) {
-                        val key = trimmed.substring(0, idx).trim()
-                        val value = trimmed.substring(idx + 1).trim()
-                        environment(key, value)
+    val envFile = file("../../.env")
+    if (envFile.exists()) {
+        envFile.forEachLine { line ->
+            val trimmed = line.trim()
+            if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
+                val idx = trimmed.indexOf('=')
+                if (idx > 0) {
+                    val key = trimmed.substring(0, idx).trim()
+                    var value = trimmed.substring(idx + 1).trim()
+                    if (key == "MAIL_PASSWORD") {
+                        value = value.replace(" ", "")
                     }
+                    environment(key, value)
                 }
             }
         }

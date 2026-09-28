@@ -3,7 +3,6 @@ package com.company.workflowautomation.ai.shared.Exception;
 import com.company.workflowautomation.auth.service.AccountAlreadyExistsException;
 import com.company.workflowautomation.workflow_execution.application.WorkflowStepExecutionService;
 import com.company.workflowautomation.workflow_steps.application.WorkflowStepService;
-import com.company.workflowautomation.auth.service.AccountAlreadyExistsException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -76,20 +75,12 @@ public class GlobalExceptionHandler {
     }
 
 
-    // ── 4. Catch-all — never expose internal details to the caller
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
         log.error("Unhandled exception: {}", ex.getMessage(), ex);
         return ResponseEntity
                 .status(500)
                 .body(new ErrorResponse("Internal server error", 500));
-    }
-    @ExceptionHandler(AccountAlreadyExistsException.class)
-    public ResponseEntity<ErrorResponse> handleAccountAlreadyExists(AccountAlreadyExistsException ex) {
-        log.warn("Account already exists: {}", ex.getMessage());
-        return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(ex.getMessage(), HttpStatus.CONFLICT.value()));
     }
 
     @ExceptionHandler(RuntimeException.class)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from './Layout';
-import { createDraft, getDrafts, approveDraft, rejectDraft, configureDraftEmailRecipient, asArray } from '../services/api';
+import { createDraft, getDrafts, getDraft, approveDraft, rejectDraft, configureDraftEmailRecipient, asArray } from '../services/api';
 import '../styles/AIDrafts.css';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -128,10 +128,24 @@ const AIDrafts = () => {
   const [emailConfigs, setEmailConfigs] = useState({});
   const [smartConfigs, setSmartConfigs] = useState({});
   const [savingEmailId, setSavingEmailId] = useState(null);
+  const [refreshingDraftId, setRefreshingDraftId] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleRefreshDraft = async (draftId) => {
+    setRefreshingDraftId(draftId);
+    try {
+      const res = await getDraft(draftId);
+      const updated = res.data;
+      setDrafts(prev => prev.map(d => d.id === draftId ? updated : d));
+    } catch {
+      showToast('Failed to refresh draft', 'error');
+    } finally {
+      setRefreshingDraftId(null);
+    }
   };
 
   const fetchDrafts = useCallback(async () => {
@@ -466,6 +480,27 @@ const AIDrafts = () => {
                           {Math.round(content.confidence * 100)}%
                         </span>
                       )}
+                      <button
+                        className="btn-draft-refresh"
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleRefreshDraft(draft.id);
+                        }}
+                        disabled={refreshingDraftId === draft.id}
+                        title="Refresh draft"
+                      >
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          style={{ animation: refreshingDraftId === draft.id ? 'ring 0.8s linear infinite' : 'none' }}
+                        >
+                          <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                      </button>
                       <div className={`expand-arrow ${isExpanded ? 'arrow-up' : ''}`}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="6 9 12 15 18 9" />

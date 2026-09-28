@@ -32,6 +32,9 @@ router.post("/analyze", async (req, res) => {
     return res.json({
       shouldRetry: retryDecision.shouldRetry,
       reason: retryDecision.reason || "Decision based on error type",
+      strategy: retryDecision.strategy || "fixed",
+      maxRetries: retryDecision.maxRetries || 1,
+      baseDelayMs: retryDecision.baseDelayMs || 5000,
     });
 
   } catch (err) {

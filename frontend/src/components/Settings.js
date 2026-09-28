@@ -11,19 +11,29 @@ const Settings = () => {
   const [displayName, setDisplayName] = useState(localStorage.getItem('displayName') || '');
   const [timezone, setTimezone] = useState(localStorage.getItem('timezone') || 'Asia/Kolkata');
 
-  // Notifications
-  const [notifExecFail, setNotifExecFail] = useState(true);
-  const [notifExecSuccess, setNotifExecSuccess] = useState(false);
-  const [notifWeeklyReport, setNotifWeeklyReport] = useState(true);
+  // Notifications — persisted in localStorage
+  const [notifExecFail, setNotifExecFail] = useState(() =>
+    localStorage.getItem('notif_execFail') !== 'false'
+  );
+  const [notifExecSuccess, setNotifExecSuccess] = useState(() =>
+    localStorage.getItem('notif_execSuccess') === 'true'
+  );
+  const [notifWeeklyReport, setNotifWeeklyReport] = useState(() =>
+    localStorage.getItem('notif_weeklyReport') !== 'false'
+  );
 
   // API
   const [showKey, setShowKey] = useState(false);
   const mockKey = 'sk-flow-••••••••••••••••••••••••••••••••••';
   const realKey = 'sk-flow-x9k2mZ4pQrLvNdTsWfHbJcYeUiOaGhBn';
 
-  // Appearance
-  const [dateFormat, setDateFormat] = useState('en-IN');
-  const [defaultView, setDefaultView] = useState('grid');
+  // Appearance — persisted in localStorage
+  const [dateFormat, setDateFormat] = useState(() =>
+    localStorage.getItem('pref_dateFormat') || 'en-IN'
+  );
+  const [defaultView, setDefaultView] = useState(() =>
+    localStorage.getItem('pref_defaultView') || 'grid'
+  );
 
   const showToast = (msg, type = 'success') => {
     setToast({ message: msg, type });
@@ -37,6 +47,9 @@ const Settings = () => {
   };
 
   const handleSaveNotifications = () => {
+    localStorage.setItem('notif_execFail', String(notifExecFail));
+    localStorage.setItem('notif_execSuccess', String(notifExecSuccess));
+    localStorage.setItem('notif_weeklyReport', String(notifWeeklyReport));
     showToast('Notification preferences saved');
   };
 
@@ -242,7 +255,11 @@ const Settings = () => {
                   </div>
                 </div>
                 <div className="settings-card-footer">
-                  <button className="btn-settings-save" onClick={() => showToast('Appearance saved')}>Save Changes</button>
+                  <button className="btn-settings-save" onClick={() => {
+                    localStorage.setItem('pref_dateFormat', dateFormat);
+                    localStorage.setItem('pref_defaultView', defaultView);
+                    showToast('Appearance saved');
+                  }}>Save Changes</button>
                 </div>
               </div>
             )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from './Layout';
-import { getWorkflows, executeWorkflow, createWorkflow, deleteWorkflow, getExecutions } from '../services/api';
+import { getWorkflows, executeWorkflow, createWorkflow, deleteWorkflow, getExecutions, updateWorkflow } from '../services/api';
 import '../styles/Workflows.css';
 
 const Workflows = () => {
@@ -18,6 +18,7 @@ const Workflows = () => {
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [togglingId, setTogglingId] = useState(null);
   const navigate = useNavigate();
 
   const showToast = (message, type = 'success') => {
@@ -92,6 +93,17 @@ const Workflows = () => {
     finally { setCreating(false); }
   };
 
+  const handleToggleStatus = async (wf) => {
+    const newStatus = (wf.status || 'ACTIVE') === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    setTogglingId(wf.id);
+    try {
+      await updateWorkflow(wf.id, { ...wf, status: newStatus });
+      setWorkflows(prev => prev.map(w => w.id === wf.id ? { ...w, status: newStatus } : w));
+      showToast(`Workflow ${newStatus === 'ACTIVE' ? 'activated' : 'deactivated'}`);
+    } catch { showToast('Failed to update workflow status', 'error'); }
+    finally { setTogglingId(null); }
+  };
+
   const filteredWorkflows = workflows.filter(wf => {
     const q = search.toLowerCase();
     const matchSearch = wf.name.toLowerCase().includes(q) || (wf.description || '').toLowerCase().includes(q);
@@ -146,7 +158,7 @@ const Workflows = () => {
         {[
           { label: 'Total Workflows', value: workflows.length, accent: '#6366f1' },
           { label: 'Total Runs', value: totalRuns, accent: '#8b5cf6' },
-          { label: 'Success Rate', value: `${successRate}%`, accent: '#10b981' },
+          { label: 'Last-Run Rate', value: `${successRate}%`, accent: '#10b981' },
           { label: 'Active Now', value: workflows.filter(w => (w.status || 'ACTIVE') === 'ACTIVE').length, accent: '#f59e0b' },
         ].map((s, i) => (
           <div key={i} className="stat-tile" style={{ '--accent': s.accent, animationDelay: `${i * 0.06}s` }}>
@@ -235,6 +247,20 @@ const Workflows = () => {
                       ? <><span className="spinner-xs"/><span>Running</span></>
                       : <><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>Run</span></>
                     }
+                  </button>
+                  <button
+                    className="btn-toggle-status"
+                    onClick={() => handleToggleStatus(wf)}
+                    disabled={togglingId === wf.id}
+                    title={(wf.status || 'ACTIVE') === 'ACTIVE' ? 'Deactivate workflow' : 'Activate workflow'}
+                  >
+                    {togglingId === wf.id ? (
+                      <span className="spinner-xs" style={{borderTopColor: '#6366f1'}}/>
+                    ) : (wf.status || 'ACTIVE') === 'ACTIVE' ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    )}
                   </button>
                   <button className="btn-delete" onClick={() => setConfirmDeleteId(wf.id)} title="Delete">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>

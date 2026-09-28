@@ -575,31 +575,29 @@ public class StepAttemptTransactionService {
         }
 
         String rawScript = config.get("script").asText();
-// Wrap in IIFE so Gemini-generated top-level `return` statements work
-String script = "(function() {\n" + rawScript + "\n})()";
         Map<String, Object> inputBindings = new HashMap<>();
 
-// Bind inputs.*
-        if (config.has("inputs")) {
-            Map<String, Object> inputsMap = new HashMap<>();
+        // Pass rawInputsJson as a JSON string so JS parses it into a 100% native JS Object
+        // (prevents Java HashMap host object property access issues in GraalVM)
+        String rawInputsJson = (config.has("inputs") && config.get("inputs").isObject())
+                ? config.get("inputs").toString()
+                : "{}";
+        inputBindings.put("rawInputsJson", rawInputsJson);
+
+        // Also inject individual input variables so scripts can reference them directly or via inputs.<key>
+        StringBuilder inputVars = new StringBuilder();
+        if (config.has("inputs") && config.get("inputs").isObject()) {
             config.get("inputs").fields().forEachRemaining(entry -> {
-                com.fasterxml.jackson.databind.JsonNode val = entry.getValue();
-                if (val.isNumber())       inputsMap.put(entry.getKey(), val.numberValue());
-                else if (val.isBoolean()) inputsMap.put(entry.getKey(), val.booleanValue());
-                else                      inputsMap.put(entry.getKey(), val.asText());
+                String key = entry.getKey();
+                if (key.matches("^[a-zA-Z_$][a-zA-Z0-9_$]*$")) {
+                    inputVars.append("var ").append(key).append(" = inputs['").append(key).append("'];\n");
+                }
             });
-            inputBindings.put("inputs", inputsMap);
         }
 
-// Bind previousStepOutput — the raw JSON string from the most recent successful step.
-// Scripts access this as: JSON.parse(previousStepOutput || '{}')
-        // Bind previousStepOutput — the raw JSON string from the most recent successful step.
-// Scripts access this as: JSON.parse(previousStepOutput || '{}')
-        // Bind previousStepOutput — the raw JSON string from the most recent successful step.
-// Scripts access this as: JSON.parse(previousStepOutput || '{}')
+        // Bind previousStepOutput and input
+        String rawOutput = "{}";
         try {
-            // executionId and orgId are passed in from executeSingleAttempt (always non-null there).
-            // When called from executeAction (null, null), we skip binding — safe fallback below.
             UUID resolvedExecutionId = executionId;
             UUID resolvedOrgId       = orgId != null ? orgId : step.getOrganizationId();
             List<StepExecutionEntity> successfulSteps = (resolvedExecutionId != null && resolvedOrgId != null)
@@ -607,27 +605,74 @@ String script = "(function() {\n" + rawScript + "\n})()";
                     resolvedExecutionId, resolvedOrgId, StepStatus.SUCCESS)
                     : List.of();
 
-            successfulSteps.stream()
-                    .filter(s -> s.getOutputData() != null)
-                    .max(Comparator.comparing(StepExecutionEntity::getUpdatedAt))
-                    .ifPresent(prev -> {
-                        JsonNode prevOutput = prev.getOutputData();
-                        // SCRIPT steps store their JS result under "result" (raw JSON string)
-                        // HTTP steps store their response under "responseBody"
-                        String rawOutput;
-                        if (prevOutput.has("result")) {
-                            rawOutput = prevOutput.get("result").asText();
-                        } else if (prevOutput.has("responseBody")) {
-                            rawOutput = prevOutput.get("responseBody").toString();
-                        } else {
-                            rawOutput = prevOutput.toString();
-                        }
-                        inputBindings.put("previousStepOutput", rawOutput);
-                        log.info("SCRIPT step: bound previousStepOutput from stepId={}", prev.getStepId());
-                    });
+            // 1. Prefer explicitly declared parent dependency
+            StepExecutionEntity prev = null;
+            if (step.getDependsOn() != null && step.getDependsOn().isArray() && step.getDependsOn().size() > 0) {
+                String depIdStr = step.getDependsOn().get(0).asText();
+                try {
+                    UUID depStepId = UUID.fromString(depIdStr);
+                    prev = successfulSteps.stream()
+                            .filter(s -> depStepId.equals(s.getStepId()))
+                            .findFirst()
+                            .orElse(null);
+                } catch (Exception ignored) {}
+            }
+
+            // 2. Fall back to most recent successful step
+            if (prev == null) {
+                prev = successfulSteps.stream()
+                        .filter(s -> s.getOutputData() != null)
+                        .max(Comparator.comparing(StepExecutionEntity::getUpdatedAt))
+                        .orElse(null);
+            }
+
+            if (prev != null && prev.getOutputData() != null) {
+                JsonNode prevOutput = prev.getOutputData();
+                if (prevOutput.has("result")) {
+                    rawOutput = prevOutput.get("result").asText();
+                } else if (prevOutput.has("responseBody")) {
+                    rawOutput = prevOutput.get("responseBody").toString();
+                } else {
+                    rawOutput = prevOutput.toString();
+                }
+                log.info("SCRIPT step: resolved previous output from stepId={}", prev.getStepId());
+            }
         } catch (Exception e) {
-            log.warn("SCRIPT step: could not resolve previousStepOutput, binding empty string. reason={}", e.getMessage());
-            inputBindings.put("previousStepOutput", "{}");
+            log.warn("SCRIPT step: could not resolve previousStepOutput, defaulting to empty object. reason={}", e.getMessage());
+            rawOutput = "{}";
+        }
+
+        inputBindings.put("previousStepOutput", rawOutput);
+        inputBindings.put("previousStepResult", rawOutput);
+
+        String preamble =
+                "var rawInputsJson = typeof rawInputsJson !== 'undefined' ? rawInputsJson : '{}';\n" +
+                "var inputs = (function() {\n" +
+                "  try {\n" +
+                "    var p = JSON.parse(rawInputsJson || '{}');\n" +
+                "    return (typeof p === 'object' && p !== null) ? p : {};\n" +
+                "  } catch (e) {\n" +
+                "    return {};\n" +
+                "  }\n" +
+                "})();\n" +
+                inputVars +
+                "var previousStepOutput = typeof previousStepOutput !== 'undefined' ? previousStepOutput : '{}';\n" +
+                "var previousStepResult = previousStepOutput;\n" +
+                "var input = (function() {\n" +
+                "  try {\n" +
+                "    var p = JSON.parse(previousStepOutput || '{}');\n" +
+                "    return (typeof p === 'object' && p !== null) ? p : {};\n" +
+                "  } catch (e) {\n" +
+                "    return {};\n" +
+                "  }\n" +
+                "})();\n";
+
+        String trimmed = rawScript.trim();
+        String script;
+        if (trimmed.contains("return ") || trimmed.contains("return\n") || trimmed.contains("return\r") || trimmed.contains("return;")) {
+            script = preamble + "(function() {\n" + rawScript + "\n})()";
+        } else {
+            script = preamble + "\n" + rawScript;
         }
 
         log.info("SCRIPT step: executing JS. scriptLength={}", script.length());
@@ -648,7 +693,10 @@ String script = "(function() {\n" + rawScript + "\n})()";
 
                 org.graalvm.polyglot.Value result =
                         context.eval("js", script);
-                return result.isNull() ? "null" : result.toString();
+                if (result == null || result.isNull()) {
+                    return "null";
+                }
+                return result.isString() ? result.asString() : result.toString();
             }
         });
 
@@ -789,14 +837,27 @@ String script = "(function() {\n" + rawScript + "\n})()";
                         .findByWorkflowExecutionIdAndOrganizationIdAndStatus(
                                 executionId, orgId, StepStatus.SUCCESS);
 
-                Optional<StepExecutionEntity> prevOpt = successfulSteps.stream()
-                        .filter(s -> s.getOutputData() != null)
-                        .filter(s -> s.getOutputData().has("resultJson")
-                                || s.getOutputData().has("result"))
-                        .max(Comparator.comparing(StepExecutionEntity::getUpdatedAt));
+                StepExecutionEntity prevEntity = null;
+                if (step.getDependsOn() != null && step.getDependsOn().isArray() && step.getDependsOn().size() > 0) {
+                    try {
+                        UUID depStepId = UUID.fromString(step.getDependsOn().get(0).asText());
+                        prevEntity = successfulSteps.stream()
+                                .filter(s -> depStepId.equals(s.getStepId()))
+                                .findFirst()
+                                .orElse(null);
+                    } catch (Exception ignored) {}
+                }
+                if (prevEntity == null) {
+                    prevEntity = successfulSteps.stream()
+                            .filter(s -> s.getOutputData() != null)
+                            .filter(s -> s.getOutputData().has("resultJson")
+                                    || s.getOutputData().has("result"))
+                            .max(Comparator.comparing(StepExecutionEntity::getUpdatedAt))
+                            .orElse(null);
+                }
 
-                if (prevOpt.isPresent()) {
-                    JsonNode prevOutput = prevOpt.get().getOutputData();
+                if (prevEntity != null) {
+                    JsonNode prevOutput = prevEntity.getOutputData();
                     JsonNode resultJson = null;
 
                     if (prevOutput.has("resultJson") && !prevOutput.get("resultJson").isNull()) {
@@ -810,13 +871,21 @@ String script = "(function() {\n" + rawScript + "\n})()";
                     }
 
                     if (resultJson != null) {
-                        if (resultJson.has("emailSubject")
-                                && !resultJson.get("emailSubject").asText("").isBlank()) {
+                        String subjectField = config.has("subjectField") ? config.get("subjectField").asText("emailSubject") : "emailSubject";
+                        String outputField  = config.has("outputField")  ? config.get("outputField").asText("emailBody")   : "emailBody";
+
+                        if (resultJson.has(subjectField) && !resultJson.get(subjectField).asText("").isBlank()) {
+                            subject = resultJson.get(subjectField).asText();
+                            log.info("EMAIL step: resolved subject from field {}. subject={}", subjectField, subject);
+                        } else if (resultJson.has("emailSubject") && !resultJson.get("emailSubject").asText("").isBlank()) {
                             subject = resultJson.get("emailSubject").asText();
                             log.info("EMAIL step: resolved subject from SCRIPT. subject={}", subject);
                         }
-                        if (resultJson.has("emailBody")
-                                && !resultJson.get("emailBody").asText("").isBlank()) {
+
+                        if (resultJson.has(outputField) && !resultJson.get(outputField).asText("").isBlank()) {
+                            body = resultJson.get(outputField).asText();
+                            log.info("EMAIL step: resolved body from SCRIPT field {}.", outputField);
+                        } else if (resultJson.has("emailBody") && !resultJson.get("emailBody").asText("").isBlank()) {
                             body = resultJson.get("emailBody").asText();
                             log.info("EMAIL step: resolved body from SCRIPT emailBody key.");
                         } else {

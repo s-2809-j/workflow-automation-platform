@@ -87,7 +87,7 @@ function normalizeGeminiOutput(parsed_raw) {
 
   return {
     name,
-    steps: rawSteps.map((step, index) => normalizeStep(step, index)),
+    steps: chainStepDependencies(rawSteps.map((step, index) => normalizeStep(step, index))),
   };
 }
 
@@ -110,6 +110,20 @@ function normalizeStep(step, index) {
     config: step.config || {},
     dependsOn: Array.isArray(step.dependsOn) ? step.dependsOn : [],
   };
+}
+
+// Automatically chain each step to depend on the previous step: Step1 → Step2 → Step3 → Step4 → Step5
+function chainStepDependencies(steps) {
+  if (!Array.isArray(steps) || steps.length === 0) return [];
+  return steps.map((step, index) => {
+    const stepId = step.id || `step-${index + 1}`;
+    const dependsOn = index === 0 ? [] : [steps[index - 1].id || `step-${index}`];
+    return {
+      ...step,
+      id: stepId,
+      dependsOn,
+    };
+  });
 }
 function upgradeActionSteps(steps) {
   return steps.map((step, index) => {
@@ -226,7 +240,7 @@ router.post("/workflows/generate", async (req, res) => {
     console.log("Gemini raw output:", JSON.stringify(parsed_raw, null, 2));
 
     const normalized = normalizeGeminiOutput(parsed_raw);
-    normalized.steps = upgradeActionSteps(normalized.steps);
+    normalized.steps = chainStepDependencies(upgradeActionSteps(normalized.steps));
 
     console.log("Normalized:", JSON.stringify(normalized, null, 2));
 

@@ -80,10 +80,15 @@ const WorkflowDetail = () => {
 
   // edit step state
   const [editingStepId, setEditingStepId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editStepType, setEditStepType] = useState('HTTP');
+  const [editOrder, setEditOrder] = useState(1);
+  const [editDependsOn, setEditDependsOn] = useState(null);
   const [editConfigText, setEditConfigText] = useState('');
   const [editConfigError, setEditConfigError] = useState('');
-  const [editName, setEditName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState(null);
+  const [reorderingId, setReorderingId] = useState(null);
 
   // form state — config stored as JS object, serialised on submit
   const [form, setForm] = useState({
@@ -135,7 +140,10 @@ const WorkflowDetail = () => {
         getSteps(id),
         getExecutions(id),
       ]);
-      setSteps(asArray(sRes.data));
+      const sortedSteps = asArray(sRes.data).sort(
+        (a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0)
+      );
+      setSteps(sortedSteps);
       const sorted = asArray(eRes.data).sort(
         (a, b) => new Date(b.startedAt) - new Date(a.startedAt)
       );
@@ -254,7 +262,11 @@ const WorkflowDetail = () => {
 
   const handleEditOpen = (step) => {
     setEditingStepId(step.id);
-    setEditName(step.name);
+    setEditName(step.name || '');
+    setEditStepType(step.stepType || 'HTTP');
+    setEditOrder(step.stepOrder || 1);
+    const dep = Array.isArray(step.dependsOn) && step.dependsOn.length > 0 ? step.dependsOn[0] : null;
+    setEditDependsOn(dep);
     setEditConfigText(JSON.stringify(step.config || {}, null, 2));
     setEditConfigError('');
   };
@@ -275,7 +287,10 @@ const WorkflowDetail = () => {
     try {
       await updateStep(stepId, {
         name: editName,
+        stepOrder: parseInt(editOrder, 10) || 1,
+        type: editStepType,
         config: JSON.parse(editConfigText),
+        dependsOn: editDependsOn ? [editDependsOn] : [],
       });
       setEditingStepId(null);
       await fetchData();
@@ -292,9 +307,31 @@ const WorkflowDetail = () => {
     setEditConfigError('');
   };
 
+  const handleMoveStep = async (step, direction) => {
+    const sorted = [...steps].sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0));
+    const currIdx = sorted.findIndex(s => s.id === step.id);
+    const targetIdx = direction === 'up' ? currIdx - 1 : currIdx + 1;
+    if (targetIdx < 0 || targetIdx >= sorted.length) return;
+
+    const targetStep = sorted[targetIdx];
+    setReorderingId(step.id);
+    try {
+      const currentOrder = step.stepOrder ?? (currIdx + 1);
+      const targetOrder = targetStep.stepOrder ?? (targetIdx + 1);
+      await updateStep(step.id, { stepOrder: targetOrder });
+      await updateStep(targetStep.id, { stepOrder: currentOrder });
+      await fetchData();
+      showToast('Step reordered');
+    } catch {
+      showToast('Failed to reorder step', 'error');
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
   // ── Run workflow ──────────────────────────────────────────────────────────
 
-  // Opens the runtime parameters modal (resets rows so the modal is always fresh)
+  // Opens the runtime parameters modal (fetches required inputs from backend)
   const handleRun = async () => {
     if (steps.length === 0) {
       showToast('Add at least one step before running', 'error');
@@ -305,7 +342,6 @@ const WorkflowDetail = () => {
       const res = await getRequiredInputs(id);
       const inputs = Array.isArray(res.data) ? res.data : [];
       setRequiredInputs(inputs);
-      // Pre-fill requiredValues with empty strings keyed by input key
       const initial = {};
       inputs.forEach(inp => { initial[inp.key] = ''; });
       setRequiredValues(initial);
@@ -313,6 +349,7 @@ const WorkflowDetail = () => {
     } catch {
       setRequiredInputs([]);
       setRequiredValues({});
+      setParamRows([{ key: '', value: '' }]);
     } finally {
       setLoadingInputs(false);
       setShowParamsModal(true);
@@ -341,6 +378,29 @@ const WorkflowDetail = () => {
       showToast('Failed to start workflow', 'error');
     } finally {
       setRunning(false);
+    }
+  };
+
+  // ── Duplicate step ────────────────────────────────────────────────────────
+
+  const handleDuplicate = async (step) => {
+    setDuplicatingId(step.id);
+    try {
+      const nextOrder = steps.length + 1;
+      const body = {
+        stepOrder: nextOrder,
+        name: `${step.name} (copy)`,
+        stepType: step.stepType,
+        config: step.config || {},
+        dependsOn: [],
+      };
+      await createStep(id, body);
+      await fetchData();
+      showToast(`"${step.name}" duplicated`);
+    } catch (err) {
+      showToast(err?.response?.data?.message || 'Failed to duplicate step', 'error');
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -400,12 +460,12 @@ const WorkflowDetail = () => {
               Add Step
             </button>
             <button
-              className={`btn-primary ${running ? 'btn-loading' : ''}`}
+              className={`btn-primary ${running || loadingInputs ? 'btn-loading' : ''}`}
               onClick={handleRun}
-              disabled={running}
+              disabled={running || loadingInputs}
             >
-              {running
-                ? <><span className="spin-xs" /><span>Running...</span></>
+              {running || loadingInputs
+                ? <><span className="spin-xs" /><span>{loadingInputs ? 'Loading...' : 'Running...'}</span></>
                 : <><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg><span>Run Workflow</span></>
               }
             </button>
@@ -509,7 +569,14 @@ const WorkflowDetail = () => {
                             {step.dependsOn && Array.isArray(step.dependsOn) && step.dependsOn.length > 0 && (
                               <div className="dep-row">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
-                                depends on step #{steps.findIndex(s => s.id === step.dependsOn[0]) + 1}
+                                {(() => {
+                                  const depId = step.dependsOn[0];
+                                  const parent = steps.find(s => s.id === depId);
+                                  if (parent) {
+                                    return `depends on step #${parent.stepOrder || steps.indexOf(parent) + 1} (${parent.name})`;
+                                  }
+                                  return `depends on ${depId.slice(0, 8)}...`;
+                                })()}
                               </div>
                             )}
                           </div>
@@ -518,11 +585,41 @@ const WorkflowDetail = () => {
                           <span className="step-id-text">{step.id.slice(0, 8)}...</span>
                           <button
                             className="del-btn"
+                            onClick={() => handleMoveStep(step, 'up')}
+                            title="Move step up"
+                            disabled={idx === 0 || reorderingId === step.id}
+                            style={{ marginRight: 4, opacity: idx === 0 ? 0.35 : 1 }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15"/></svg>
+                          </button>
+                          <button
+                            className="del-btn"
+                            onClick={() => handleMoveStep(step, 'down')}
+                            title="Move step down"
+                            disabled={idx === steps.length - 1 || reorderingId === step.id}
+                            style={{ marginRight: 4, opacity: idx === steps.length - 1 ? 0.35 : 1 }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                          </button>
+                          <button
+                            className="del-btn"
                             onClick={() => handleEditOpen(step)}
                             title="Edit step"
                             style={{ marginRight: 4, color: '#6366f1' }}
                           >
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                          <button
+                            className="del-btn"
+                            onClick={() => handleDuplicate(step)}
+                            title="Duplicate step"
+                            disabled={duplicatingId === step.id}
+                            style={{ marginRight: 4, color: '#10b981' }}
+                          >
+                            {duplicatingId === step.id
+                              ? <span className="spin-xs" style={{ borderTopColor: '#10b981' }} />
+                              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            }
                           </button>
                           <button
                             className="del-btn"
@@ -540,20 +637,76 @@ const WorkflowDetail = () => {
                           marginTop: 12, padding: '16px', background: '#f8faff',
                           border: '1px solid #e0e7ff', borderRadius: 10
                         }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+                            <div>
+                              <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
+                                Step Name
+                              </label>
+                              <input
+                                type="text"
+                                value={editName}
+                                onChange={e => setEditName(e.target.value)}
+                                style={{
+                                  width: '100%', padding: '8px 10px', borderRadius: 6,
+                                  border: '1px solid var(--border)', fontSize: 13, boxSizing: 'border-box'
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
+                                Step Type
+                              </label>
+                              <select
+                                value={editStepType}
+                                onChange={e => setEditStepType(e.target.value)}
+                                style={{
+                                  width: '100%', padding: '8px 10px', borderRadius: 6,
+                                  border: '1px solid var(--border)', fontSize: 13, boxSizing: 'border-box', background: '#fff'
+                                }}
+                              >
+                                {STEP_TYPES.map(t => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
+                                Order #
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={editOrder}
+                                onChange={e => setEditOrder(e.target.value)}
+                                style={{
+                                  width: '100%', padding: '8px 10px', borderRadius: 6,
+                                  border: '1px solid var(--border)', fontSize: 13, boxSizing: 'border-box'
+                                }}
+                              />
+                            </div>
+                          </div>
+
                           <div style={{ marginBottom: 10 }}>
                             <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
-                              Step Name
+                              Runs After (Dependency)
                             </label>
-                            <input
-                              type="text"
-                              value={editName}
-                              onChange={e => setEditName(e.target.value)}
+                            <select
+                              value={editDependsOn || ''}
+                              onChange={e => setEditDependsOn(e.target.value || null)}
                               style={{
                                 width: '100%', padding: '8px 10px', borderRadius: 6,
-                                border: '1px solid var(--border)', fontSize: 13, boxSizing: 'border-box'
+                                border: '1px solid var(--border)', fontSize: 13, boxSizing: 'border-box', background: '#fff'
                               }}
-                            />
+                            >
+                              <option value="">No dependency (Runs immediately)</option>
+                              {steps.filter(s => s.id !== step.id).map(s => (
+                                <option key={s.id} value={s.id}>
+                                  Step #{s.stepOrder}: {s.name} ({s.stepType})
+                                </option>
+                              ))}
+                            </select>
                           </div>
+
                           <div style={{ marginBottom: 10 }}>
                             <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
                               Config (JSON)
@@ -574,7 +727,7 @@ const WorkflowDetail = () => {
                                 fontSize: 12, fontFamily: 'monospace', resize: 'vertical'
                               }}
                             />
-                            {step.stepType === 'HTTP' && (
+                            {editStepType === 'HTTP' && (
                               <p style={{ fontSize: 11, color: '#6366f1', marginTop: 4 }}>
                                 💡 For HTTP steps, replace the <code>url</code> with your real API endpoint.
                               </p>
@@ -1047,17 +1200,6 @@ const WorkflowDetail = () => {
                 </button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* ── TOAST ── */}
-        {toast && (
-          <div className={`toast toast-${toast.type}`}>
-            {toast.type === 'success'
-              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
-            }
-            {toast.message}
           </div>
         )}
       </div>

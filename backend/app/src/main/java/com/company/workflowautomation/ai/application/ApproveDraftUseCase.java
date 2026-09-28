@@ -87,41 +87,17 @@ public class ApproveDraftUseCase {
 
         log.info("Created workflow id={} name={}", saved.getId(), workflowName);
 
-        // 4. Build mapping from AI step id (e.g. "step-1") → real UUID
+        // 4 & 5. Create WorkflowStepEntities using two-pass saving
+        // Pass 1: Save steps to generate true database UUIDs (Hibernate @UuidGenerator assigns on INSERT)
+        // Pass 2: Wire up dependsOn with the real database UUIDs from Pass 1
         JsonNode steps = root.path("steps");
         Map<String, UUID> aiIdToRealId = new HashMap<>();
-        if (steps.isArray()) {
-            for (JsonNode step : steps) {
-                String aiId = step.path("id").asText();
-                aiIdToRealId.put(aiId, UUID.randomUUID());
-            }
-        }
-        log.info("aiIdToRealId map built: {}", aiIdToRealId);
+        List<WorkflowStepEntity> savedEntities = new ArrayList<>();
 
-        // 5. Create WorkflowStepEntities — apply user overrides before saving
         if (steps.isArray()) {
             for (int i = 0; i < steps.size(); i++) {
                 JsonNode step = steps.get(i);
                 String aiId = step.path("id").asText();
-
-                JsonNode depsNode = step.has("dependsOn")
-                        ? step.path("dependsOn")
-                        : step.path("depends_on");
-
-                List<String> resolvedDeps = new ArrayList<>();
-                if (depsNode.isArray()) {
-                    for (JsonNode dep : depsNode) {
-                        String depAiId = dep.asText();
-                        UUID resolvedId = aiIdToRealId.get(depAiId);
-                        if (resolvedId != null) {
-                            resolvedDeps.add(resolvedId.toString());
-                            log.info("Resolved dep: aiId={} → uuid={}", depAiId, resolvedId);
-                        } else {
-                            log.error("BROKEN DEP: step aiId={} declares dep on '{}' which is NOT in aiIdToRealId map. Available keys: {}",
-                                    aiId, depAiId, aiIdToRealId.keySet());
-                        }
-                    }
-                }
 
                 String stepType = step.has("stepType")
                         ? step.path("stepType").asText("ACTION")
@@ -138,9 +114,7 @@ public class ApproveDraftUseCase {
                         inputOverrides != null ? inputOverrides.get(aiId) : null;
 
                 if (overridesForStep != null && !overridesForStep.isEmpty()) {
-
                     if ("SCRIPT".equalsIgnoreCase(stepType)) {
-                        // Merge into inputs object
                         com.fasterxml.jackson.databind.node.ObjectNode inputsNode =
                                 config.has("inputs") && config.get("inputs").isObject()
                                         ? (com.fasterxml.jackson.databind.node.ObjectNode)
@@ -155,7 +129,6 @@ public class ApproveDraftUseCase {
                     }
 
                     if ("EMAIL".equalsIgnoreCase(stepType)) {
-                        // Apply recipient override directly to config
                         if (overridesForStep.containsKey("recipient")) {
                             String recipient = overridesForStep.get("recipient").toString().trim();
                             if (!recipient.isBlank()) {
@@ -169,20 +142,59 @@ public class ApproveDraftUseCase {
                 }
 
                 WorkflowStepEntity stepEntity = new WorkflowStepEntity();
-                stepEntity.setId(aiIdToRealId.get(aiId));
                 stepEntity.setOrganizationId(organizationId);
                 stepEntity.setWorkflowId(saved.getId());
                 stepEntity.setStepOrder(i + 1);
                 stepEntity.setName(step.path("name").asText("Step " + (i + 1)));
                 stepEntity.setStepType(stepType);
                 stepEntity.setConfig(config);
-                stepEntity.setDependsOn(objectMapper.valueToTree(resolvedDeps));
+                stepEntity.setDependsOn(objectMapper.createArrayNode());
                 stepEntity.setCreatedAt(Instant.now());
                 stepEntity.setUpdatedAt(Instant.now());
 
-                stepRepository.saveAndFlush(stepEntity);
-                log.info("Created step order={} name={} type={} dependsOn={}",
-                        i + 1, stepEntity.getName(), stepType, resolvedDeps);
+                WorkflowStepEntity savedStep = stepRepository.saveAndFlush(stepEntity);
+                aiIdToRealId.put(aiId, savedStep.getId());
+                savedEntities.add(savedStep);
+                log.info("Pass 1: Created step order={} name={} with dbId={}",
+                        i + 1, savedStep.getName(), savedStep.getId());
+            }
+
+            // Pass 2: Wire up dependsOn with guaranteed real database UUIDs
+            for (int i = 0; i < steps.size(); i++) {
+                JsonNode step = steps.get(i);
+                WorkflowStepEntity savedStep = savedEntities.get(i);
+
+                JsonNode depsNode = step.has("dependsOn")
+                        ? step.path("dependsOn")
+                        : step.path("depends_on");
+
+                List<String> resolvedDeps = new ArrayList<>();
+                if (depsNode != null && depsNode.isArray()) {
+                    for (JsonNode dep : depsNode) {
+                        String depAiId = dep.asText();
+                        UUID resolvedId = aiIdToRealId.get(depAiId);
+                        if (resolvedId != null) {
+                            resolvedDeps.add(resolvedId.toString());
+                            log.info("Resolved dep: aiId={} → realDbId={}", depAiId, resolvedId);
+                        } else {
+                            log.warn("Dependency aiId={} not found in aiIdToRealId keys: {}",
+                                    depAiId, aiIdToRealId.keySet());
+                        }
+                    }
+                }
+
+                // Fallback: If not step 0 and resolvedDeps is empty, chain to the previous step's real UUID
+                if (resolvedDeps.isEmpty() && i > 0) {
+                    UUID prevRealId = savedEntities.get(i - 1).getId();
+                    resolvedDeps.add(prevRealId.toString());
+                    log.info("Auto-chained dep for step i={}: fell back to prevStep realDbId={}", i, prevRealId);
+                }
+
+                savedStep.setDependsOn(objectMapper.valueToTree(resolvedDeps));
+                savedStep.setUpdatedAt(Instant.now());
+                stepRepository.saveAndFlush(savedStep);
+                log.info("Pass 2: Saved step order={} name={} dependsOn={}",
+                        i + 1, savedStep.getName(), resolvedDeps);
             }
         }
 

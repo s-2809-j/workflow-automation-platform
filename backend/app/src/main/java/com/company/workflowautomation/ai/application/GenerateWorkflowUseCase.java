@@ -90,11 +90,12 @@ public class GenerateWorkflowUseCase {
     - Scripts run in a sandboxed JavaScript engine. They cannot make HTTP calls,
       import modules, or access global state.
     - The step config must include an "inputs" object with all configurable values.
-    - The script reads those values via the bound variable names.
+    - The script reads those values via `inputs.<key>`.
+    - The previous step's output is automatically parsed and injected as `input` (guaranteed to be an object, defaults to {}).
     - Example of CORRECT threshold script for exchange rate monitoring:
       config: {
         "inputs": { "threshold": 85, "targetCurrency": "INR" },
-        "script": "var rate = parseFloat(previousStepResult) || 0; var threshold = parseFloat(inputs.threshold) || 85; var crossed = rate > threshold; JSON.stringify({ rate: rate, threshold: threshold, crossed: crossed, message: crossed ? 'Rate ' + rate + ' crossed threshold ' + threshold : 'Rate ' + rate + ' is within threshold' });"
+        "script": "var rate = (input && input.rates) ? parseFloat(input.rates[inputs.targetCurrency] || 0) : (parseFloat(previousStepOutput) || 0); var threshold = parseFloat(inputs.threshold) || 85; var crossed = rate > threshold; JSON.stringify({ rate: rate, targetCurrency: inputs.targetCurrency, threshold: threshold, crossed: crossed, message: crossed ? 'Rate ' + rate + ' crossed threshold ' + threshold : 'Rate ' + rate + ' is within threshold' });"
       }
     - The threshold value in inputs is the DEFAULT. Users can update it in the workflow
       step configuration at any time without touching the script code.
