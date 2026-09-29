@@ -28,3 +28,8 @@ ai-service/.env
 # Docker
 docker-compose.override.yml
 *.log
+bin/
+build/
+.gradle/
+.env
+application-local.yml
