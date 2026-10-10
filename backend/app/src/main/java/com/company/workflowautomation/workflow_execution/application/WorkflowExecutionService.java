@@ -2,6 +2,7 @@ package com.company.workflowautomation.workflow_execution.application;
 
 import com.company.workflowautomation.shared.tenant.TenantContextHolder;
 import com.company.workflowautomation.util.SecurityUtils;
+import com.company.workflowautomation.workflow.domain.WorkflowRun;
 import com.company.workflowautomation.workflow_execution.application.dag.DagBuilder;
 import com.company.workflowautomation.workflow_execution.application.dag.StepNode;
 import com.company.workflowautomation.workflow_execution.application.schedular.WorkflowScheduler;
@@ -11,6 +12,7 @@ import com.company.workflowautomation.workflow_execution.jpa.WorkflowExecutionEn
 import com.company.workflowautomation.workflow_execution.jpa.WorkflowExecutionRepository;
 import com.company.workflowautomation.workflow.jpa.WorkflowEntity;
 import com.company.workflowautomation.workflow.jpa.WorkflowJpaRepository;
+import com.company.workflowautomation.workflow.infrastructure.WorkflowRunRepository;
 import com.company.workflowautomation.workflow_steps.jpa.WorkflowStepEntity;
 import com.company.workflowautomation.workflow_steps.jpa.WorkflowStepRepository;
 import com.company.workflowautomation.workflow_execution.model.StepStatus;
@@ -19,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 @Service
@@ -45,6 +49,9 @@ public class WorkflowExecutionService {
     private final PlatformTransactionManager transactionManager;
     private final StepExecutionRepository stepExecutionRepository;
     private final WorkflowJpaRepository workflowRepository;
+    private final WorkflowRunRepository workflowRunRepository;
+    @Qualifier("workflowExecutor")
+    private final ExecutorService workflowExecutor;
 
     /**
      * Public entry-point for the HTTP controller — accepts optional runtime parameters.
@@ -53,7 +60,15 @@ public class WorkflowExecutionService {
      */
     @Transactional
     public WorkflowExecutionEntity startExecution(UUID workflowId, JsonNode runtimeParams) {
+        return launchExecution(workflowId, runtimeParams).execution();
+    }
 
+    @Transactional
+    public UUID startExecutionAndGetRunId(UUID workflowId, JsonNode runtimeParams) {
+        return launchExecution(workflowId, runtimeParams).run().getId();
+    }
+
+    private LaunchResult launchExecution(UUID workflowId, JsonNode runtimeParams) {
         UUID organizationId = SecurityUtils.getOrganizationId();
         setOrganizationContext(organizationId);
         WorkflowEntity workflow = workflowRepository
@@ -65,7 +80,9 @@ public class WorkflowExecutionService {
                 ? runtimeParams
                 : objectMapper.createObjectNode();
 
-        WorkflowExecutionEntity execution = createExecution(workflowId, organizationId, triggerData);
+        LaunchResult launchResult = createPendingRunAndExecution(workflowId, organizationId, triggerData);
+        WorkflowExecutionEntity execution = launchResult.execution();
+        WorkflowRun run = launchResult.run();
 
         try {
             List<WorkflowStepEntity> steps =
@@ -89,7 +106,7 @@ public class WorkflowExecutionService {
                             stepMap,
                             () -> markExecutionStatus(execution, "SUCCESS", null),
                             (errMsg) -> markExecutionStatus(execution, "FAILED", errMsg),
-                            null  // run is managed inside scheduler
+                            run
                     );
                 } catch (Exception e) {
                     log.error("Async workflow execution failed. executionId={} error={}",
@@ -99,15 +116,18 @@ public class WorkflowExecutionService {
                 } finally {
                     TenantContextHolder.clear();
                 }
-            });
+            }, workflowExecutor);
 
-            return execution;
+            return launchResult;
 
         } catch (Exception e) {
             log.error("Failed to start workflow execution. workflowId={} error={}",
                     workflowId, e.getMessage(), e);
             String msg = e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.toString();
-            return markExecutionStatus(execution, "FAILED", msg);
+            markExecutionStatus(execution, "FAILED", msg);
+            run.markFailed(msg);
+            workflowRunRepository.saveAndFlush(run);
+            return launchResult;
         }
     }
 
@@ -120,22 +140,26 @@ public class WorkflowExecutionService {
         return startExecution(workflowId, null);
     }
 
-    private WorkflowExecutionEntity createExecution(UUID workflowId, UUID organizationId, JsonNode triggerData) {
+    private LaunchResult createPendingRunAndExecution(UUID workflowId, UUID organizationId, JsonNode triggerData) {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         return transactionTemplate.execute(status -> {
             entityManager.createNativeQuery("SELECT set_config('app.current_organization', :organizationId, true)")
                     .setParameter("organizationId", organizationId.toString())
                     .getSingleResult();
 
+            WorkflowRun run = new WorkflowRun(workflowId, organizationId);
+            WorkflowRun savedRun = workflowRunRepository.saveAndFlush(run);
+
             WorkflowExecutionEntity execution = new WorkflowExecutionEntity();
             execution.setId(UUID.randomUUID());
             execution.setWorkflowId(workflowId);
             execution.setOrganizationId(organizationId);
-            execution.setStatus("RUNNING");
+            execution.setStatus("PENDING");
             execution.setTriggerData(triggerData != null ? triggerData : objectMapper.createObjectNode());
             execution.setStartedAt(Instant.now());
             execution.setCompletedAt(null);
-            return executionRepository.saveAndFlush(execution);
+            WorkflowExecutionEntity savedExecution = executionRepository.saveAndFlush(execution);
+            return new LaunchResult(savedExecution, savedRun);
         });
     }
 
@@ -217,7 +241,10 @@ public class WorkflowExecutionService {
                 .findByIdAndOrganizationId(workflowId, organizationId)
                 .orElseThrow(() -> new WorkflowNotFoundException(workflowId));
 
-        WorkflowExecutionEntity execution = createExecution(workflowId, organizationId, objectMapper.createObjectNode());
+        LaunchResult launchResult = createPendingRunAndExecution(
+                workflowId, organizationId, objectMapper.createObjectNode());
+        WorkflowExecutionEntity execution = launchResult.execution();
+        WorkflowRun run = launchResult.run();
 
         try {
             List<WorkflowStepEntity> steps =
@@ -239,7 +266,7 @@ public class WorkflowExecutionService {
                             stepMap,
                             () -> markExecutionStatus(execution, "SUCCESS", null),
                             (errMsg) -> markExecutionStatus(execution, "FAILED", errMsg),
-                            null
+                            run
                     );
                 } catch (Exception e) {
                     log.error("Scheduled workflow execution failed. executionId={} error={}",
@@ -249,7 +276,7 @@ public class WorkflowExecutionService {
                 } finally {
                     TenantContextHolder.clear();
                 }
-            });
+            }, workflowExecutor);
 
             return execution;
 
@@ -257,7 +284,10 @@ public class WorkflowExecutionService {
             log.error("Failed to start scheduled execution. workflowId={} error={}",
                     workflowId, e.getMessage(), e);
             String msg = e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : e.toString();
-            return markExecutionStatus(execution, "FAILED", msg);
+            markExecutionStatus(execution, "FAILED", msg);
+            run.markFailed(msg);
+            workflowRunRepository.saveAndFlush(run);
+            return execution;
         }
     }
 
@@ -267,5 +297,7 @@ public class WorkflowExecutionService {
                 .setParameter("organizationId", organizationId.toString())
                 .getSingleResult();
     }
+
+    private record LaunchResult(WorkflowExecutionEntity execution, WorkflowRun run) {}
 
 }

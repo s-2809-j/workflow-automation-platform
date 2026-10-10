@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -31,8 +32,8 @@ public class WorkflowExecutionController {
     public ResponseEntity<?> execute(
             @PathVariable UUID workflowId,
             @RequestBody(required = false) JsonNode runtimeParams) {
-        workflowExecutionService.startExecution(workflowId, runtimeParams);
-        return ResponseEntity.ok("Workflow execution started");
+        UUID runId = workflowExecutionService.startExecutionAndGetRunId(workflowId, runtimeParams);
+        return ResponseEntity.accepted().body(Map.of("runId", runId));
     }
 
     @GetMapping("/workflows/{workflowId}/executions")
