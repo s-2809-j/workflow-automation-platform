@@ -1,6 +1,7 @@
 package com.company.workflowautomation.workflow_execution.application.schedular;
 
 import com.company.workflowautomation.workflow.domain.WorkflowRun;
+import com.company.workflowautomation.workflow.domain.WorkflowRunStatus;
 import com.company.workflowautomation.workflow.infrastructure.WorkflowRunRepository;
 import com.company.workflowautomation.workflow_execution.application.WorkflowStepExecutionService;
 import com.company.workflowautomation.workflow_execution.application.dag.StepNode;
@@ -8,13 +9,11 @@ import com.company.workflowautomation.workflow_execution.jpa.StepExecutionEntity
 import com.company.workflowautomation.workflow_execution.jpa.StepExecutionRepository;
 import com.company.workflowautomation.workflow_execution.model.StepStatus;
 import com.company.workflowautomation.workflow_steps.jpa.WorkflowStepEntity;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -28,10 +27,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkflowScheduler {
-    @Value("${workflow.executor.pool-size:5}")
-    private int poolSize;
     private final WorkflowStepExecutionService workflowStepExecutionService;
-    private ExecutorService executor;
+    @Qualifier("workflowExecutor")
+    private final ExecutorService executor;
     private final PlatformTransactionManager transactionManager;
     private final StepExecutionRepository stepExecutionRepository;
     private final WorkflowRunRepository workflowRunRepository;
@@ -40,6 +38,21 @@ public class WorkflowScheduler {
     private final ConcurrentMap<UUID, AtomicBoolean> completionFiredByExecution = new ConcurrentHashMap<>();
     @PersistenceContext
    private EntityManager entityManager;
+
+    public WorkflowScheduler(
+            WorkflowStepExecutionService workflowStepExecutionService,
+            PlatformTransactionManager transactionManager,
+            StepExecutionRepository stepExecutionRepository,
+            WorkflowRunRepository workflowRunRepository
+    ) {
+        this(
+                workflowStepExecutionService,
+                Executors.newFixedThreadPool(5),
+                transactionManager,
+                stepExecutionRepository,
+                workflowRunRepository
+        );
+    }
 
     public boolean canExecute(StepNode node, Map<UUID, StepNode> graph) {
 
@@ -100,10 +113,16 @@ public class WorkflowScheduler {
         log.info("Scheduler started. executionId={} steps={}", executionId, graph.size());
 
         UUID workflowId = stepMap.values().iterator().next().getWorkflowId();
+        boolean newRunCreated = false;
         if (run == null) {
             run = new WorkflowRun(workflowId, orgId);
+            newRunCreated = true;
+        }
+        if (run.getStatus() == WorkflowRunStatus.PENDING) {
             run.markRunning();
-            workflowRunRepository.saveAndFlush(run);
+        }
+        workflowRunRepository.saveAndFlush(run);
+        if (newRunCreated) {
             log.info("WorkflowRun created. runId={}", run.getId());
         }
 
@@ -337,22 +356,8 @@ public class WorkflowScheduler {
             latch.countDown();
         }
     }
-    @PostConstruct
-    public void init() {
-        this.executor = Executors.newFixedThreadPool(poolSize);
-    }
 
-    @PreDestroy
-    public void shutdown() {
-        log.info("Shutting down workflow executor thread pool.");
-        executor.shutdown();
-        try {
-            if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
+    public void init() {
+        // no-op: executor is injected by Spring; method kept for test compatibility
     }
 }
