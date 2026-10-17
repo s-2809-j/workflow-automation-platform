@@ -262,8 +262,10 @@ public class WorkflowExecutionServiceTest {
             entityManager.createNativeQuery("SELECT set_config('app.current_organization', :orgId, false)")
                     .setParameter("orgId", finalOrgId.toString()).getSingleResult();
             UUID userId = UUID.randomUUID();
+            String email = "noparams-" + userId + "@test.com";
+
             userRepository.saveAndFlush(new com.company.workflowautomation.user.entity.UserEntity(
-                    userId, finalOrgId, "noparams@test.com", "hash", "ACTIVE",
+                    userId, finalOrgId, email, "hash", "ACTIVE",
                     java.time.Instant.now(), java.time.Instant.now()));
             var wf = new com.company.workflowautomation.workflow.jpa.WorkflowEntity();
             wf.setOrganizationId(finalOrgId); wf.setName("NoParams WF");
@@ -298,8 +300,10 @@ public class WorkflowExecutionServiceTest {
             entityManager.createNativeQuery("SELECT set_config('app.current_organization', :orgId, false)")
                     .setParameter("orgId", finalOrgId.toString()).getSingleResult();
             UUID userId = UUID.randomUUID();
+            String email = "rparams-" + userId + "@test.com";
+
             userRepository.saveAndFlush(new com.company.workflowautomation.user.entity.UserEntity(
-                    userId, finalOrgId, "rparams@test.com", "hash", "ACTIVE",
+                    userId, finalOrgId, email, "hash", "ACTIVE",
                     java.time.Instant.now(), java.time.Instant.now()));
             var wf = new com.company.workflowautomation.workflow.jpa.WorkflowEntity();
             wf.setOrganizationId(finalOrgId); wf.setName("Runtime Params WF");
