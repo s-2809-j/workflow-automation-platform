@@ -26,6 +26,7 @@ A multi-tenant workflow automation platform for designing, executing, scheduling
 - [Database](#database)
 - [Security](#security)
 - [Testing](#testing)
+- [Known Issues](#known-issues)
 - [Roadmap](#roadmap)
 - [Contributors](#contributors)
 - [License](#license)
@@ -103,7 +104,7 @@ sequenceDiagram
     B-->>U: draftId
 
     U->>B: POST /api/v1/ai/drafts/{id}/approve
-    B->>DB: INSERT workflow + steps, UPDATE draft → APPROVED
+    B->>DB: INSERT workflow + steps, UPDATE draft → ACTIVE
     B-->>U: workflowId
 
     U->>B: POST /api/workflows/{id}/execute
@@ -133,7 +134,7 @@ sequenceDiagram
 | GraalVM JS | 23.0.1 | Sandboxed in-process JS execution (SCRIPT steps) |
 | Testcontainers | 1.19.3 | Integration tests with real PostgreSQL |
 | Lombok | — | Boilerplate reduction |
-| Gradle | 8.5 (wrapper) | Build automation |
+| Gradle | 8.14.5 (wrapper) | Build automation |
 
 ### Frontend
 | Technology | Version | Purpose |
@@ -166,21 +167,18 @@ sequenceDiagram
 
 ## Key Features
 
-| Feature | Status |
+| Feature | Description |
 |---|---|
-| Workflow CRUD (create, list, get, update, delete) | ✅ Implemented |
-| Step composition (HTTP, EMAIL, SCRIPT, LOG, DELAY, DATABASE, WEBHOOK; execution service also accepts ACTION) | ✅ Implemented |
-| DAG execution engine (topological sort, dependency resolution) | ✅ Implemented |
-| Retry mechanism (fixed + exponential back-off, per-step attempt tracking) | ✅ Implemented |
-| Cron scheduler (timezone-aware, enable/disable per workflow) | ✅ Implemented |
-| AI workflow drafting via Google Gemini (PENDING → ACTIVE [approved] / REJECTED) | ✅ Implemented |
-| AI execution log anomaly analysis + retry recommendation | ✅ Implemented |
-| JWT authentication (login + registration) | ✅ Implemented |
-| Multi-tenant organization scoping (TenantFilter) | ✅ Implemented |
-| Execution analytics dashboard (computed client-side in React) | ✅ Implemented |
-| PostgreSQL Row-Level Security enforcement | ⚠️ Partial — init script is a stub; application-layer filtering active |
-| Flyway baseline schema management | ⚠️ Partial — Flyway disabled by default; V3/V4 migrations present; JPA `ddl-auto: update` used in dev |
-| Docker Compose full-stack (all three services) | ⚠️ Partial — AI service not included in `docker-compose.yml` |
+| **Workflow CRUD** | Create, view, update, and delete workflow definitions |
+| **Step Composition** | Supports HTTP, EMAIL, SCRIPT (GraalVM JS), LOG, DELAY, DATABASE, and WEBHOOK step types |
+| **DAG Execution Engine** | Topological sorting and step dependency resolution |
+| **Retry Mechanism** | Per-step retry tracking with fixed and exponential back-off strategies |
+| **Cron Scheduling** | Timezone-aware workflow scheduling with enable/disable toggles |
+| **AI Workflow Drafting** | Generate workflow drafts from plain language using Google Gemini (`PENDING`, `ACTIVE`, `REJECTED`) |
+| **AI Log Analysis** | Anomaly detection and retry recommendation for failed runs |
+| **Authentication** | Stateless JWT authentication with user and organization registration |
+| **Multi-Tenancy** | Organization-level isolation via `TenantFilter` context propagation |
+| **Analytics Dashboard** | Client-side execution analytics and per-step log inspection |
 
 ---
 
@@ -256,7 +254,7 @@ workflow-automation/
 | Docker Compose | v2+ | Multi-service orchestration |
 | JDK | 17+ | Local backend development |
 | Node.js | 18+ | Local frontend / AI service development |
-| Gradle | 8.5 (wrapper included) | Backend builds |
+| Gradle | 8.14.5 (wrapper included) | Backend builds |
 | MongoDB | — | AI service (or use MongoDB Atlas) |
 
 ### Environment Variables
@@ -318,9 +316,10 @@ The build script reads `.env` from the repo root automatically. API available at
 ```bash
 cd frontend
 npm install
-npm start
+npm start          # starts local development server
+npm run build      # creates production build in build/
 ```
-Available at `http://localhost:3000`.
+The frontend dev server runs on port `3000` (`http://localhost:3000`). It connects to the backend API at `http://localhost:8080/api` (configured directly in `src/services/api.js`; no `.env` file or environment variable is configured).
 
 **AI Service**
 ```bash
@@ -489,11 +488,7 @@ cd backend
 ./gradlew :app:test
 ```
 
-- Framework: JUnit 5 + Mockito + Spring Boot Test + Testcontainers (PostgreSQL)
-- Test files: `AuthServiceTest`, `WorkflowControllerTest`, `WorkflowExecutionServiceTest`
-- **Verified: `BUILD SUCCESSFUL`** (tests pass with Testcontainers spinning up a real PostgreSQL instance)
-
-> `./gradlew jacocoTestReport` — not verified; JaCoCo plugin not configured in `build.gradle.kts`.
+Test stack: JUnit 5, Spring Boot Test, Mockito, and Testcontainers (dependencies declared in `build.gradle.kts`; Docker is not required as test classes do not instantiate containers).
 
 ### Frontend
 
@@ -503,21 +498,20 @@ npm install
 npm test
 ```
 
-- Framework: Jest + React Testing Library (via react-scripts / CRA 5)
-- `react-router-dom` **is declared** in `package.json` (`^7.14.0`) and installs successfully.
-- **Verified: `npm test` FAILS** even after `npm install`. Root cause: `react-router-dom` v7 is ESM-only; CRA 5's bundled Jest uses a CommonJS resolver (`jest-resolve`) that cannot resolve its package exports. The test suite errors before any test runs:
-
-  ```
-  Cannot find module 'react-router-dom' from 'src/App.js'
-  Test Suites: 1 failed, 1 total — Tests: 0 total
-  ```
-
-  Fix requires Jest `moduleNameMapper` / `transformIgnorePatterns` config, or downgrading `react-router-dom` to v6.
-- `npm run test:coverage` — **not available**: no `test:coverage` script in `package.json`.
+Test stack: Jest and React Testing Library (via `react-scripts`).
+Note: See [Known Issues](#known-issues) regarding a Jest test runner startup issue with `react-router-dom` v7.
 
 ### AI Service
 
-- **No test files present** in the repository. `npm test` would fail.
+Automated tests are not set up yet.
+
+---
+
+## Known Issues
+
+- **Frontend `npm test` fails to start**: The application runs normally via `npm start`, but Create React App 5's bundled Jest cannot resolve `react-router-dom` v7 because it is ESM-only. Workarounds: configure Jest `moduleNameMapper` / `transformIgnorePatterns`, or use `react-router-dom` v6.
+- **Workflow schedule listing**: `WorkflowScheduleController.getSchedules()` ignores the `{workflowId}` path variable in `/api/workflows/{workflowId}/schedule` and returns all schedules across all workflows.
+- **AI draft email recipient endpoint**: `configureDraftEmailRecipient` in frontend `src/services/api.js` calls `/api/ai/...` (via POST), while other AI calls use `/api/v1/ai/...` (and the backend controller expects `PUT /api/v1/ai/drafts/{draftId}/email-recipient`). The backend does not serve the legacy `/api/ai/...` path.
 
 ---
 
