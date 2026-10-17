@@ -132,7 +132,7 @@ sequenceDiagram
 | PostgreSQL | 15 | Primary datastore |
 | Flyway | — | Versioned schema migrations (V3, V4 present) |
 | GraalVM JS | 23.0.1 | Sandboxed in-process JS execution (SCRIPT steps) |
-| Testcontainers | 1.19.3 | Integration tests with real PostgreSQL |
+| Testcontainers | 1.19.3 | Declared in build.gradle.kts (unused by current tests) |
 | Lombok | — | Boilerplate reduction |
 | Gradle | 8.14.5 (wrapper) | Build automation |
 
@@ -167,18 +167,21 @@ sequenceDiagram
 
 ## Key Features
 
-| Feature | Description |
-|---|---|
-| **Workflow CRUD** | Create, view, update, and delete workflow definitions |
-| **Step Composition** | Supports HTTP, EMAIL, SCRIPT (GraalVM JS), LOG, DELAY, DATABASE, and WEBHOOK step types |
-| **DAG Execution Engine** | Topological sorting and step dependency resolution |
-| **Retry Mechanism** | Per-step retry tracking with fixed and exponential back-off strategies |
-| **Cron Scheduling** | Timezone-aware workflow scheduling with enable/disable toggles |
-| **AI Workflow Drafting** | Generate workflow drafts from plain language using Google Gemini (`PENDING`, `ACTIVE`, `REJECTED`) |
-| **AI Log Analysis** | Anomaly detection and retry recommendation for failed runs |
-| **Authentication** | Stateless JWT authentication with user and organization registration |
-| **Multi-Tenancy** | Organization-level isolation via `TenantFilter` context propagation |
-| **Analytics Dashboard** | Client-side execution analytics and per-step log inspection |
+| Feature | Status | Description |
+|---|---|---|
+| **Workflow CRUD** | Implemented | Create, view, update, and delete workflow definitions |
+| **Step Composition** | Implemented | Supports HTTP, EMAIL, SCRIPT (GraalVM JS), LOG, DELAY, DATABASE, and WEBHOOK step types |
+| **DAG Execution Engine** | Implemented | Topological sorting and step dependency resolution |
+| **Retry Mechanism** | Implemented | Per-step retry tracking with fixed and exponential back-off strategies |
+| **Cron Scheduling** | Implemented | Timezone-aware workflow scheduling with enable/disable toggles |
+| **AI Workflow Drafting** | Implemented | Generate workflow drafts from plain language using Google Gemini (`PENDING`, `ACTIVE`, `REJECTED`) |
+| **AI Log Analysis** | Implemented | Anomaly detection and retry recommendation for failed runs |
+| **Authentication** | Implemented | Stateless JWT authentication with user and organization registration |
+| **Multi-Tenancy** | Implemented | Organization-level isolation via `TenantFilter` context propagation |
+| **Analytics Dashboard** | Implemented | Client-side execution analytics and per-step log inspection |
+| **PostgreSQL Row-Level Security** | Partial | Application-layer filtering active; `01-rls.sql` init script is a stub |
+| **Flyway Schema Management** | Partial | V3 and V4 migrations present; Flyway disabled by default (`ddl-auto: update` used in dev) |
+| **Docker Compose Orchestration** | Partial | Covers backend, frontend, and PostgreSQL; AI service is run separately |
 
 ---
 
@@ -488,7 +491,7 @@ cd backend
 ./gradlew :app:test
 ```
 
-Test stack: JUnit 5, Spring Boot Test, Mockito, and Testcontainers (dependencies declared in `build.gradle.kts`; Docker is not required as test classes do not instantiate containers).
+Test stack: JUnit 5, Spring Boot Test, Mockito (Testcontainers is declared in `build.gradle.kts` but unused by current tests; no Docker required).
 
 ### Frontend
 
@@ -510,8 +513,9 @@ Automated tests are not set up yet.
 ## Known Issues
 
 - **Frontend `npm test` fails to start**: The application runs normally via `npm start`, but Create React App 5's bundled Jest cannot resolve `react-router-dom` v7 because it is ESM-only. Workarounds: configure Jest `moduleNameMapper` / `transformIgnorePatterns`, or use `react-router-dom` v6.
+- **Hardcoded frontend API URL**: the base URL is set to `http://localhost:8080/api` in `src/services/api.js` (no environment variable); deploying elsewhere requires a code change.
 - **Workflow schedule listing**: `WorkflowScheduleController.getSchedules()` ignores the `{workflowId}` path variable in `/api/workflows/{workflowId}/schedule` and returns all schedules across all workflows.
-- **AI draft email recipient endpoint**: `configureDraftEmailRecipient` in frontend `src/services/api.js` calls `/api/ai/...` (via POST), while other AI calls use `/api/v1/ai/...` (and the backend controller expects `PUT /api/v1/ai/drafts/{draftId}/email-recipient`). The backend does not serve the legacy `/api/ai/...` path.
+- **AI draft email recipient endpoint**: `configureDraftEmailRecipient` calls `/api/ai/...`, which the backend does not serve (backend routes are `/api/v1/ai/...`, and the backend expects `PUT /api/v1/ai/drafts/{draftId}/email-recipient`).
 
 ---
 
